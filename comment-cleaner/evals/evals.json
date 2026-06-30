@@ -1,0 +1,29 @@
+{
+  "skill_name": "comment-cleaner",
+  "evals": [
+    {
+      "id": 0,
+      "name": "staged-python-overcomment",
+      "prompt": "I just staged a bunch of changes to cache.py and Claude added way too many comments while writing it. Can you strip out the pointless ones before I commit? Keep anything that actually matters.",
+      "expected_output": "Scope detected as staged. Redundant restatement comments removed (e.g. 'look up the entry', 'return the entry'). The magic-number comment `t = 300  # default time-to-live` refactored to a named constant like `ttl_seconds` and the comment dropped. The `# type: ignore` directive preserved. The genuine 'why' comment about the upstream store serving stale entries preserved. A summary reported.",
+      "scope": "staged",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "branch-js-mixed",
+      "prompt": "This feature branch has gotten cluttered with obvious comments before I open the PR. Strip the noise but leave anything important. Don't touch files I haven't changed on this branch.",
+      "expected_output": "Scope detected as branch (vs default). Only comments added on this branch are considered; util.js on main is untouched. JSDoc block, eslint-disable directive, and TODO are all kept. 'loop over each attempt' removed. `const m = 3  // maximum number of attempts` refactored to `MAX_ATTEMPTS` and the loop updated. The final 'why' comment about swallowing the last error is kept. Summary reported.",
+      "scope": "branch",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "default-branch-wholecodebase",
+      "prompt": "Go through the repo and get rid of the comments that don't pull their weight. We're on main and everything's committed.",
+      "expected_output": "Scope detected as whole codebase (on default branch, nothing staged). Redundant comments in math_utils.py removed. The redundant `# toggle debug logging` on the already-named DEBUG removed. The API_VERSION 'why' comment (context that can't be captured in a name) kept and reported. Summary reported.",
+      "scope": "all",
+      "files": []
+    }
+  ]
+}
