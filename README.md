@@ -24,7 +24,7 @@ This repo is its own plugin marketplace. From inside Claude Code:
 
 ```
 /plugin marketplace add geraintguan/skills
-/plugin install comment-cleaner@scalesignal-skills
+/plugin install comment-cleaner@geraintguan-skills
 ```
 
 You can also point the marketplace at a local clone instead of GitHub:
