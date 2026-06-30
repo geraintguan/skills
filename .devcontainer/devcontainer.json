@@ -1,0 +1,9 @@
+{
+	"name": "geraintguan/skills",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"postCreateCommand": [
+		".devcontainer/postCreateCommand.zsh"
+	]
+}
