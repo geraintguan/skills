@@ -1,0 +1,14 @@
+{
+  "name": "scalesignal-skills",
+  "owner": {
+    "name": "Geraint Guan",
+    "email": "geraint@scalesignal.dev"
+  },
+  "plugins": [
+    {
+      "name": "comment-cleaner",
+      "source": "./",
+      "description": "Removes redundant code comments after coding tasks, refactoring names to preserve context. Bundles a Stop hook for automatic cleanup."
+    }
+  ]
+}

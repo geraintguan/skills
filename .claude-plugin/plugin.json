@@ -1,0 +1,10 @@
+{
+  "name": "comment-cleaner",
+  "version": "0.1.0",
+  "description": "Removes low-value, redundant code comments while preserving functional directives, doc comments, TODOs, and genuine 'why' notes — refactoring variable/function names to capture context where a comment can be replaced by a better name. Includes a Stop hook that automatically cleans the comments in your changes when a coding task finishes.",
+  "author": {
+    "name": "Geraint Guan",
+    "email": "geraint@scalesignal.dev"
+  },
+  "keywords": ["comments", "cleanup", "refactor", "code-quality", "hooks", "git"]
+}

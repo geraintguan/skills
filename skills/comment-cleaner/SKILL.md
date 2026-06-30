@@ -30,9 +30,16 @@ link), the comment stays.
 
 ### 1. Determine scope and get the material
 
-Run the bundled scope resolver from the repo root. It encodes the scope contract
-deterministically (so the diff range and merge-base are always right) and emits
-exactly what to review — it's plain `git` + `sh`, no language runtime required:
+**If the request already names the scope** — specific files, or "the changes from
+this task" — operate on exactly that and skip auto-detection. (The bundled Stop
+hook does this: it hands you the list of files the task changed so cleanup stays
+proportional to the work, rather than expanding to the whole codebase.) Otherwise,
+auto-detect with the resolver below.
+
+Run the bundled scope resolver (it sits next to this skill at `scripts/scope.sh`).
+It encodes the scope contract deterministically (so the diff range and merge-base
+are always right) and emits exactly what to review — plain `git` + `sh`, no
+language runtime required:
 
 ```bash
 sh <skill-dir>/scripts/scope.sh
