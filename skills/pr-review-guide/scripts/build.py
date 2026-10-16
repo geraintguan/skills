@@ -20,11 +20,14 @@ Config keys:
             tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
                      inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
+            data_flow: [{title?, diagram: mermaid source, caption?: HTML}]  how data moves through this
+                       section's change, usually a sequenceDiagram; [] opts out, a missing key warns
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
   overview (optional, rendered first): {
     summary: [HTML paragraphs: what the change does and why],
     before: [HTML bullets], after: [HTML bullets],
     diagram: mermaid source for the architecture, diagram_caption: HTML,
+    data_flow: [{title?, diagram, caption?}]  # high-level data flow across the whole change
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [HTML bullets: key design decisions and who made them]
   }
@@ -65,6 +68,20 @@ def diff_lines(d):
         elif o or n:
             shown["old"].add(o); shown["new"].add(n); o += 1; n += 1
     return shown
+
+Flow = dict[str, str]
+
+def check_flows(where: str, flows: list[Flow]) -> list[Flow]:
+    for flow in flows:
+        if not isinstance(flow, dict) or not str(flow.get("diagram", "")).strip():
+            sys.exit(f"{where}: each data_flow needs a mermaid diagram")
+    return flows
+
+def render_flow(flow: Flow) -> str:
+    """Title, diagram and caption of one flow, shared by the overview and the sections."""
+    title = f'<h4 class="flow-title">{flow["title"]}</h4>' if flow.get("title") else ""
+    cap = f'<p class="ov-caption">{flow["caption"]}</p>' if flow.get("caption") else ""
+    return f'{title}<pre class="mermaid">{html.escape(flow["diagram"])}</pre>{cap}'
 
 def check_line_notes(path, d, notes):
     shown = diff_lines(d)
@@ -122,7 +139,10 @@ for g in cfg["groups"]:
         for c in items:
             if c.get("impact") not in ("High", "Medium", "Low"):
                 sys.exit(f"{g['id']}: impact must be High, Medium or Low: {c}")
-    groups.append({**g, "files": files})
+    if "data_flow" not in g:
+        print(f"warning: section {g['id']} has no data_flow; set it to [] if no data moves", file=sys.stderr)
+    flows = check_flows(g["id"], g.get("data_flow", []))
+    groups.append({**g, "files": files, "data_flow": "".join(f"<div>{render_flow(f)}</div>" for f in flows)})
 
 skips = tuple(cfg.get("skip_prefixes", []))
 missing = [f for f in git("diff", "--name-only", base, head).split() if f not in seen and not f.startswith(skips)]
@@ -147,6 +167,9 @@ def render_overview(ov):
     if ov.get("diagram"):
         cap = f'<p class="ov-caption">{ov["diagram_caption"]}</p>' if ov.get("diagram_caption") else ""
         parts.append(f'<div><h3>Architecture</h3><div class="ov-diagram"><pre class="mermaid">{html.escape(ov["diagram"])}</pre>{cap}</div></div>')
+    if flows := check_flows("overview", ov.get("data_flow", [])):
+        parts.append('<div><h3>Data flow</h3><div class="ov-flows">'
+                     + "".join(f'<div class="ov-diagram">{render_flow(f)}</div>' for f in flows) + "</div></div>")
     if ov.get("layout"):
         rows = "".join(
             f'<tr><td class="p"><a href="#{r["group"]}">{html.escape(r["path"])}</a></td><td>{r["role"]}</td><td class="s">{stat(r["path"])}</td></tr>'
