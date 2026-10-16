@@ -204,7 +204,8 @@ section.overview h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter
 .ov-card.before { border-top: 3px solid var(--del-fg); }
 .ov-card.after { border-top: 3px solid var(--add-fg); }
 .ov-diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
-.ov-diagram pre.mermaid { margin: 0; background: transparent; text-align: center; }
+pre.mermaid { margin-block: 8px; padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; text-align: center; font-family: var(--sans); }
+.ov-diagram pre.mermaid { margin: 0; padding: 0; background: transparent; border: 0; }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .ov-layout { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .ov-layout table { border-collapse: collapse; width: 100%; font-size: 13px; }
@@ -255,6 +256,7 @@ const META_EXTRA = /*__META__*/[];
 const PR_URL = "__PR_URL__";
 const STORE_KEY = "__STORE_KEY__";
 const COLLAPSE_LINES = 400;
+const MERMAID_URL = "https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.esm.min.mjs";
 
 function loadReviewed() { try { return new Set(JSON.parse(localStorage.getItem(STORE_KEY) || "[]")); } catch { return new Set(); } }
 function saveReviewed(set) { try { localStorage.setItem(STORE_KEY, JSON.stringify([...set])); } catch {} }
@@ -523,5 +525,37 @@ function bindToolbar() {
   });
 }
 
-renderMeta(); renderToc(); renderMain(); bindToolbar(); refresh();
+function mermaidTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return {
+    darkMode: css.colorScheme.includes("dark"),
+    background: v("--panel"), fontFamily: v("--sans"), fontSize: "13px",
+    primaryColor: v("--accent-soft"), primaryBorderColor: v("--accent"), primaryTextColor: v("--fg"),
+    secondaryColor: v("--soft"), tertiaryColor: v("--panel"),
+    lineColor: v("--muted"), textColor: v("--fg"),
+    clusterBkg: v("--soft"), clusterBorder: v("--line"), edgeLabelBackground: v("--panel"),
+  };
+}
+
+// Mermaid measures text while laying out, so a diagram inside a collapsed section or file
+// is rendered only once it scrolls into view.
+async function renderDiagrams() {
+  const nodes = document.querySelectorAll("pre.mermaid");
+  if (!nodes.length) return;
+  const { default: mermaid } = await import(MERMAID_URL);
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: mermaidTheme() });
+  const observer = new IntersectionObserver((entries) => {
+    const visible = [];
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      visible.push(entry.target);
+    }
+    if (visible.length) mermaid.run({ nodes: visible }).catch((err) => console.error("mermaid", err));
+  });
+  nodes.forEach((el) => observer.observe(el));
+}
+
+renderMeta(); renderToc(); renderMain(); bindToolbar(); refresh(); renderDiagrams().catch((err) => console.error("mermaid", err));
 </script>

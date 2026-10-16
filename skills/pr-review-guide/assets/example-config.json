@@ -37,7 +37,7 @@
         "deleted": [{"impact": "Low", "text": "<code>retryThreeTimes</code>. Its only caller moved to <code>withRetry</code>."}]
       },
       "files": [
-        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.",
+        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.<pre class=\"mermaid\">sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  C->>R: fn\n  R->>R: try fn\n  R-->>R: wait backoffDelay(n), retry\n  R-->>C: result or last error</pre>",
          "lines": [
            {"line": 4, "text": "Delay doubles each attempt: 200, 400, 800 ms for a 200 ms base.", "impact": "Low"},
            {"line": 14, "text": "No sleep after the last attempt, so a failure surfaces right away.", "impact": "Medium"}

@@ -26,6 +26,7 @@ Config keys:
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [HTML bullets: key design decisions and who made them]
   }
+Diagrams anywhere else go in HTML fields as <pre class="mermaid">source</pre>.
 The script fails if a changed file is in no group and not skipped.
 """
 import html, json, subprocess, sys, pathlib

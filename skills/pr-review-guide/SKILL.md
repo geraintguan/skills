@@ -100,6 +100,14 @@ The parts, in the order to write them:
 Define library and framework terms in one clause the first time they appear, for
 example "RTK Query cache". Readers ask.
 
+Draw every diagram with [Mermaid](https://mermaid.js.org/), never ASCII art, hand-written
+SVG or images. The overview diagram goes in `overview.diagram`. Anywhere else (a file
+note, a line note, a change item), put the source in `<pre class="mermaid">…</pre>`
+inside the HTML. The page loads mermaid.js, themes it to match light and dark, and
+renders each diagram when it scrolls into view. Pick the diagram type that fits:
+`flowchart` for what uses what, `sequenceDiagram` for call or event order,
+`stateDiagram-v2` for state changes, `erDiagram` for schema changes.
+
 ### 5. Describe the tests
 
 1. Run `python3 <skill>/scripts/tests_inventory.py <base> inventory.json` from the repo
@@ -141,6 +149,8 @@ Before publishing:
   wrong ones: a misremembered string, a misread condition, a guessed behaviour.
 - Run a syntax check on the page script: pull out the last inline `<script>` and run
   `node --check` on it.
+- Open the page and check that every diagram renders. A Mermaid syntax error shows
+  as an error box in place of the diagram.
 
 Publish the HTML with the Artifact tool. Give the page a short `<title>` that names the
 change; the config's `title` key sets it. Republish to the same file path on every
