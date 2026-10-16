@@ -223,6 +223,11 @@ pre.mermaid { margin-block: 8px; padding: 12px; background: var(--bg); border: 1
 .dia.full { position: fixed; inset: 0; z-index: 50; margin: 0; padding: 16px; background: var(--bg); }
 .dia.full .dia-view { flex: 1; height: auto !important; touch-action: none; }
 body.dia-lock { overflow: hidden; }
+.lib-warning { margin-block: 0 16px; padding: 12px 16px; border: 1px solid var(--imp-med); border-left-width: 4px; border-radius: 8px; background: var(--imp-med-bg); color: var(--fg); max-width: 96ch; }
+.lib-warning[hidden] { display: none; }
+.lib-warning p { margin: 0; }
+.lib-warning ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font: 12px var(--mono); }
+.dia-failed { margin: 0; padding: 12px; border: 1px dashed var(--imp-med); border-radius: 6px; color: var(--imp-med); font-size: 13px; }
 
 /* Flowcharts: hovering a node dims everything it isn't connected to. */
 .dia svg .node, .dia svg .flowchart-link { transition: opacity .15s; }
@@ -299,6 +304,11 @@ body.dia-lock { overflow: hidden; }
     <div class="legend"><span><span class="imp high">High</span>user-visible behaviour or logic that's easy to get wrong</span><span><span class="imp medium">Medium</span>real logic change with limited reach</span><span><span class="imp low">Low</span>mechanical: renames, imports, tests, stories, copy</span></div>
     <div class="legend"><span><b>Test types:</b></span><span><span class="ttype">Unit</span> calls a pure function, renders nothing</span><span><span class="ttype">Integration</span> renders components (Testing Library in jsdom, or a Storybook play function in Chromium)</span><span><span class="ttype">E2E</span> drives the running app (Playwright)</span></div>
   </header>
+
+  <div class="lib-warning" id="diagram-warning" role="alert" hidden>
+    <p><b>Some diagrams didn't load, or aren't interactive.</b> This guide loads its diagram libraries (Mermaid, React and React Flow) from a CDN, pinned to the versions it was built with, and those versions no longer work together here. Regenerate the guide with the latest pr-review-guide skill to fix it.</p>
+    <ul></ul>
+  </div>
 
   <div class="toolbar">
     <span class="progress" id="progress">0 of 0 reviewed</span>
@@ -610,6 +620,21 @@ function jumpTo(target) {
   revealTarget(document.getElementById(target) ? target : fileId(target))?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// Pinned CDN builds can drift apart: a library stops loading, React Flow picks up a second copy of
+// React, or Mermaid changes the SVG the interactive features read. Each problem shows once in the banner.
+const diagramProblems = new Set();
+function reportDiagramProblem(what, err) {
+  console.error("diagram", what, err);
+  diagramProblems.add(err ? `${what}: ${String(err.message ?? err).split(/[;\n]/)[0]}` : what);
+  const box = document.getElementById("diagram-warning");
+  box.hidden = false;
+  box.querySelector("ul").innerHTML = [...diagramProblems].map((p) => `<li>${esc(p)}</li>`).join("");
+}
+
+function showDiagramFailed(el) {
+  el.innerHTML = '<p class="dia-failed">This diagram couldn\'t be drawn. See the warning at the top of the page.</p>';
+}
+
 const cssVars = new Map();
 function cssVar(name) {
   if (!cssVars.has(name)) cssVars.set(name, getComputedStyle(document.documentElement).getPropertyValue(name).trim());
@@ -781,6 +806,7 @@ function flowchartNodeId(el, svgId) {
 function enhanceFlowchart(svg, edges, links) {
   const nodes = new Map();
   for (const el of svg.querySelectorAll("g.node")) { const id = flowchartNodeId(el, svg.id); if (id) nodes.set(id, el); }
+  if (!nodes.size && svg.querySelector("g.node")) reportDiagramProblem("Flowchart hover and links are off: Mermaid's node ids changed");
   const paths = new Map([...svg.querySelectorAll("path[data-edge]")].map((p) => [p.dataset.id, p]));
   const focus = (id) => {
     svg.classList.add("dia-focus");
@@ -814,6 +840,7 @@ const STEP_MS = 1100;
 
 function sequenceSteps(stage, svg) {
   const lines = [...svg.querySelectorAll('[data-et="message"]')].sort((a, b) => +a.dataset.id.slice(1) - +b.dataset.id.slice(1));
+  if (!lines.length && svg.querySelector(".messageText")) reportDiagramProblem("Sequence playback is off: Mermaid's output no longer marks its messages");
   const steps = lines.map((line) => {
     const label = line.previousElementSibling;
     return label?.classList.contains("messageText") ? [label, line] : [line];
@@ -862,14 +889,19 @@ async function renderMermaid(mermaid, pre) {
   pre.replaceWith(stage);
   const view = svgPanZoom(stage, svg);
   if (isSequence) view.steps = sequenceSteps(stage, svg);
-  if (isFlowchart) enhanceFlowchart(svg, await flowchartEdges(mermaid, source), links);
   bindStage(stage, view);
+  if (isFlowchart) {
+    const edges = await flowchartEdges(mermaid, source).catch((err) => { reportDiagramProblem("Flowchart hover is off: Mermaid's parser API changed", err); return []; });
+    enhanceFlowchart(svg, edges, links);
+  }
 }
 
 let xyflow;
 function loadXyflow() {
-  xyflow ??= Promise.all(Object.values(XYFLOW_URLS).map((url) => import(url))).then(([React, client, flow, dagre]) =>
-    ({ React, createRoot: client.createRoot, flow, dagre: dagre.default ?? dagre }));
+  xyflow ??= Promise.all(Object.values(XYFLOW_URLS).map((url) => import(url))).then(([React, client, flow, dagre]) => {
+    if (React.version !== client.version) throw new Error(`React ${React.version} and react-dom ${client.version} don't match`);
+    return { React, createRoot: client.createRoot, flow, dagre: dagre.default ?? dagre };
+  });
   return xyflow;
 }
 
@@ -1048,7 +1080,9 @@ async function renderGraph(host) {
   view.classList.add("rf");
   sizeView(view, initial, graph);
   const { React, flow } = lib;
-  lib.createRoot(view).render(React.createElement(flow.ReactFlowProvider, null, React.createElement(GraphView, { lib, graph, initial, stage })));
+  // A second copy of React makes React Flow's hooks throw while rendering.
+  const onUncaughtError = (err) => { reportDiagramProblem("A graph failed to render, usually because two copies of React loaded", err); showDiagramFailed(view); };
+  lib.createRoot(view, { onUncaughtError }).render(React.createElement(flow.ReactFlowProvider, null, React.createElement(GraphView, { lib, graph, initial, stage })));
 }
 
 // Mermaid and React Flow both measure text while laying out, so a diagram inside a collapsed
@@ -1063,7 +1097,10 @@ async function renderDiagrams() {
     return m;
   }) : null;
   if (charts.length < diagrams.length) loadXyflow();
-  const render = (el) => (el.matches(".rf-graph") ? renderGraph(el) : mermaid.then((m) => renderMermaid(m, el))).catch((err) => console.error("diagram", err));
+  const render = (el) => (el.matches(".rf-graph") ? renderGraph(el) : mermaid.then((m) => renderMermaid(m, el))).catch((err) => {
+    reportDiagramProblem(el.matches(".rf-graph") ? "React Flow didn't load" : "Mermaid didn't load", err);
+    if (el.isConnected) showDiagramFailed(el);
+  });
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;

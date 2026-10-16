@@ -273,12 +273,31 @@ Before publishing:
 - Run a syntax check on the page script: pull out the last inline `<script>` and run
   `node --check` on it.
 - Open the page and check that every diagram renders. A Mermaid syntax error shows
-  as an error box in place of the diagram. A graph that fails to load logs a
-  `diagram` error in the console and leaves an empty box.
+  as an error box in place of the diagram. If a diagram library fails at runtime, a
+  warning banner appears under the header and the diagram shows "This diagram couldn't
+  be drawn". See "Library version drift" below.
 
 Publish the HTML with the Artifact tool. Give the page a short `<title>` that names the
 change; the config's `title` key sets it. Republish to the same file path on every
 update so the URL stays the same.
+
+#### Library version drift
+
+The page loads Mermaid, React, React Flow and dagre from CDNs, pinned to exact
+versions in `assets/template.html`. Over time those builds can stop working together:
+a URL stops resolving, React Flow picks up a second copy of React, or a Mermaid release
+changes the SVG the interactive features read. The page checks for each of these. When
+one happens it shows a warning banner asking the reader to regenerate the guide, lists
+what failed, and logs it to the console under `diagram`. Non-interactive parts keep
+working.
+
+When a user reports the banner, fix the template, not the one page:
+
+1. Read the banner's list or the console for which library failed.
+2. Bump the pinned URLs in `MERMAID_URL` or `XYFLOW_URLS` to versions that work
+   together. When React's version changes, list the React URLs that jsDelivr's builds
+   import, and point each one at the single pinned copy in the import map.
+3. Rebuild the guide and check that every diagram renders with no banner.
 
 ### 7. Handle feedback
 
