@@ -72,8 +72,8 @@ branch's commits vs. the default branch → else the whole tracked codebase.
 skills/comment-cleaner/SKILL.md         # the skill
 skills/comment-cleaner/scripts/scope.sh # scope resolver (git + sh)
 skills/pr-review-guide/SKILL.md         # the review-guide skill
-skills/pr-review-guide/scripts/         # build.py (config → page), tests_inventory.py
-skills/pr-review-guide/assets/          # template.html, example-config.json, demo repo script
+skills/pr-review-guide/scripts/         # build.py (config → page), tests_inventory.py, usage.py (build tokens and cost)
+skills/pr-review-guide/assets/          # template.html, example config and usage, demo repo script
 skills/pr-review-guide/references/      # config.md (schema and writing rules)
 ```
 

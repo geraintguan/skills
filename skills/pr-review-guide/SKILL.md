@@ -23,7 +23,8 @@ is the content: a JSON config that `scripts/build.py` turns into one HTML page.
 
 From top to bottom:
 
-1. **Header.** Title, PR link, line counts, and legends for impact levels and test types.
+1. **Header.** Title, PR link, line counts, the tokens and estimated cost of building
+   the guide, and legends for impact levels and test types.
 2. **Overview.** Summary, before/after cards, a mermaid architecture diagram, a
    code-layout table, and key decisions.
 3. **Sections, in review order.** Each section has:
@@ -135,6 +136,13 @@ renders each diagram when it scrolls into view. Pick the diagram type that fits:
 python3 <skill>/scripts/build.py config.json out.html
 ```
 
+Each build counts the tokens and estimated cost of making the guide so far and shows
+them in the header. It reads this session's transcript and its subagents' transcripts,
+from the last launch of this skill onwards, so a rebuild after feedback adds that
+work too. The cost is an estimate at API list prices, not what a subscription is
+billed. If the hover breakdown says "no price" for a model, add the model to `PRICES`
+in `scripts/usage.py`.
+
 The builder fails on any of these:
 - a changed file in no section
 - an empty diff for a listed file
@@ -169,6 +177,9 @@ every future guide gets the change.
 
 - `scripts/build.py`: checks the config and renders the page from the template.
 - `scripts/tests_inventory.py`: lists the tests changed per file.
+- `scripts/usage.py`: totals the tokens and estimated cost of building the guide. The
+  builder calls it; run it alone to inspect the numbers.
 - `assets/template.html`: the page layout, styles and behaviour, always in dark mode.
-- `assets/example-config.json`: a made-up example that uses every key.
+- `assets/example-config.json`: a made-up example that uses every key, with
+  `assets/example-usage.json` as its usage file.
 - `references/config.md`: the config schema and the rules for writing the content.

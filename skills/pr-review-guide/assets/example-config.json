@@ -8,6 +8,7 @@
   "pr_url": "https://github.com/example/demo/pull/12",
   "store_key": "demo-pr12-reviewed",
   "meta_extra": ["Demo data"],
+  "usage_file": "example-usage.json",
   "skip_prefixes": [],
   "overview": {
     "summary": [
