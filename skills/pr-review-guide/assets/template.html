@@ -109,7 +109,7 @@ tr.hunk td { background: var(--hunk-bg); color: var(--hunk-fg); padding-block: 3
 .hljs-variable.language_, .hljs-meta { color: var(--hl-kw); }
 
 
-details.tests-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+details.tests-card { background: var(--panel); border-bottom: 1px solid var(--line); }
 details.tests-card > summary { list-style: none; cursor: pointer; user-select: none; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 details.tests-card > summary::-webkit-details-marker { display: none; }
 details.tests-card > summary::before { content: "▸"; display: inline-block; width: 12px; font-size: 12px; color: var(--muted); transition: transform .15s; }
@@ -121,17 +121,12 @@ table.tests { border-collapse: collapse; width: 100%; min-width: 980px; font-siz
 table.tests th, table.tests td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 table.tests tr:last-child td { border-bottom: none; }
 table.tests th { font-weight: 600; color: var(--muted); background: var(--soft); white-space: nowrap; }
-table.tests td.tname { min-width: 220px; max-width: 300px; }
-table.tests td.tname .tfile { display: block; margin-top: 3px; font: 11.5px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
-table.tests td.tname a { color: var(--fg); text-decoration: none; font-weight: 500; }
-table.tests td.tname a:hover { color: var(--accent); }
+table.tests td.tname { min-width: 220px; max-width: 300px; font-weight: 500; }
 .tchg, .ttype { font: 600 10px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; white-space: nowrap; display: inline-block; }
 .tchg.Added { background: var(--add-gutter); color: var(--add-fg); }
 .tchg.Modified { background: var(--hunk-bg); color: var(--hunk-fg); }
 .tchg.Removed { background: var(--del-gutter); color: var(--del-fg); }
 .ttype { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
-section.group.collapsed details.tests-card { display: none; }
-section.group.done details.tests-card { border-color: var(--add-gutter); }
 
 .fnote { padding: 10px 14px 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13.5px; max-width: 110ch; display: flex; gap: 10px; align-items: baseline; }
 .fnote .who, .anno-box .who { font: 600 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); flex: none; }
@@ -317,6 +312,23 @@ function renderDiffRows(file) {
 
 function splitPath(path) { const i = path.lastIndexOf("/"); return [path.slice(0, i + 1), path.slice(i + 1)]; }
 
+const TEST_CHANGES = ["Added", "Modified", "Removed"];
+
+function renderTests(rows) {
+  const tests = [...rows].sort((a, b) => TEST_CHANGES.indexOf(a.change) - TEST_CHANGES.indexOf(b.change));
+  if (!tests.length) return "";
+  const counts = TEST_CHANGES.map((c) => [c, tests.filter((x) => x.change === c).length]).filter(([, n]) => n)
+    .map(([c, n]) => `${n} ${c.toLowerCase()}`).join(" · ");
+  const body = tests.map((x) => `<tr>
+      <td><span class="tchg ${x.change}">${x.change}</span></td>
+      <td class="tname">${esc(x.name)}</td>
+      <td><span class="ttype">${x.type}</span></td>
+      <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
+  return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
+    <div class="tests-scroll"><table class="tests"><thead><tr><th>Change</th><th>Test</th><th>Type</th><th>Inputs</th><th>Expected output</th><th>Why</th></tr></thead>
+    <tbody>${body}</tbody></table></div></details>`;
+}
+
 function fileCard(file) {
   const [dir, base] = splitPath(file.path);
   const el = document.createElement("article");
@@ -336,19 +348,19 @@ function fileCard(file) {
     </div>
     <div class="fbody"></div>`;
   const body = el.querySelector(".fbody");
-  const fileNote = file.note ? `<div class="fnote"><span class="who">About this file</span><span>${file.note}</span></div>` : "";
+  const preamble = (file.note ? `<div class="fnote"><span class="who">About this file</span><span>${file.note}</span></div>` : "") + renderTests(file.test_rows);
   const rows = renderDiffRows(file);
-  if (!rows.length) body.innerHTML = fileNote + '<div class="empty-diff">No text changes.</div>';
+  if (!rows.length) body.innerHTML = preamble + '<div class="empty-diff">No text changes.</div>';
   else {
     const table = (rs) => `<table class="diff"><tbody>${rs.join("")}</tbody></table>`;
     if (rows.length > COLLAPSE_LINES) {
-      body.innerHTML = fileNote + table(rows.slice(0, COLLAPSE_LINES));
+      body.innerHTML = preamble + table(rows.slice(0, COLLAPSE_LINES));
       const more = document.createElement("button");
       more.type = "button"; more.className = "showmore";
       more.textContent = `Show the remaining ${rows.length - COLLAPSE_LINES} lines`;
-      more.onclick = () => { body.innerHTML = fileNote + table(rows); };
+      more.onclick = () => { body.querySelector("table.diff tbody").insertAdjacentHTML("beforeend", rows.slice(COLLAPSE_LINES).join("")); more.remove(); };
       body.appendChild(more);
-    } else body.innerHTML = fileNote + table(rows);
+    } else body.innerHTML = preamble + table(rows);
   }
   const box = el.querySelector("input");
   box.checked = reviewed.has(file.path);
@@ -420,23 +432,6 @@ function renderChanges(g) {
   return `<div class="changes">${g.lead ? `<p class="lead">${g.lead}</p>` : ""}${types.join("")}</div>`;
 }
 
-const TEST_CHANGES = ["Added", "Modified", "Removed"];
-
-function renderTests(g) {
-  const tests = [...(g.tests || [])].sort((a, b) => TEST_CHANGES.indexOf(a.change) - TEST_CHANGES.indexOf(b.change));
-  if (!tests.length) return "";
-  const counts = TEST_CHANGES.map((c) => [c, tests.filter((x) => x.change === c).length]).filter(([, n]) => n)
-    .map(([c, n]) => `${n} ${c.toLowerCase()}`).join(" · ");
-  const rows = tests.map((x) => `<tr>
-      <td><span class="tchg ${x.change}">${x.change}</span></td>
-      <td class="tname"><a href="#${fileId(x.file)}">${esc(x.name)}</a><span class="tfile">${esc(splitPath(x.file)[1])}</span></td>
-      <td><span class="ttype">${x.type}</span></td>
-      <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
-  return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
-    <div class="tests-scroll"><table class="tests"><thead><tr><th>Change</th><th>Test</th><th>Type</th><th>Inputs</th><th>Expected output</th><th>Why</th></tr></thead>
-    <tbody>${rows}</tbody></table></div></details>`;
-}
-
 function renderMain() {
   const main = document.getElementById("main");
   GROUPS.forEach((g, i) => {
@@ -446,7 +441,6 @@ function renderMain() {
     s.innerHTML = `<div class="group-head">
         <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)}">▾</button><span class="n">${i + 1}</span>${esc(g.title)} <span class="n">${g.files.length} files · <span class="plus">+${add}</span> <span class="minus">−${rem}</span></span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
-        ${renderTests(g)}
       </div>`;
     g.files.forEach((f) => s.appendChild(fileCard(f)));
     main.appendChild(s);
