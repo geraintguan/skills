@@ -18,9 +18,11 @@ description: >-
 
 # PR review guide
 
-The guide helps one person review a change fast and miss nothing. It puts the diff
-in an order that makes sense and says where the risk is. It also explains what each
-test covers. The layout and behaviour are fixed by `assets/template.html`. Your job
+The guide helps one person review a change fast and miss nothing. It tells the change
+as a story: each section builds on the one before, so the reader always knows why
+they are looking at this code now. It says where the risk is and explains what each
+test covers. A human reads it top to bottom, so readability comes first: small
+sections, short sentences, one idea at a time. The layout and behaviour are fixed by `assets/template.html`. Your job
 is the content: a JSON config that `scripts/build.py` turns into one HTML page.
 
 ## What the page contains
@@ -34,6 +36,7 @@ From top to bottom:
    code-layout table, and key decisions.
 3. **Sections, in review order.** Each section has:
    - a caret, plus counts per impact level
+   - a bridge: one sentence linking it to the section before, so the story carries on
    - a one-line lead saying where to start
    - collapsible Added / Modified / Deleted lists, where every item has an impact tag
    - a Data flow card: how data moves through this section's part of the change
@@ -78,14 +81,38 @@ not `"$B:path"`, because zsh reads `$B:h` and the like as modifiers.
 For a large diff, delegate reading by area to parallel subagents. Ask each for facts
 with function names and line numbers, not prose.
 
-### 3. Plan the sections
+### 3. Plan the story
 
-Order the sections the way a reviewer should read them:
+Plan the guide as a story before writing any of it. The reader should finish each
+section knowing why the next one comes next.
 
-1. The core new piece first.
-2. Then the shared wrappers and infrastructure that use it.
-3. Then each consumer.
-4. Then supporting changes and copy.
+1. **Write the story in a few sentences first.** Say what problem the change solves,
+   what the new piece is, how the rest of the code adopts it, and what's left over.
+   If you can't tell it simply, you don't understand the change yet: go back to step 2.
+2. **Turn each step of the story into a section.** One section is one idea a reviewer
+   can hold in their head: "the new retry helper", "the client now treats HTTP errors
+   as failures". If a section needs "and" in its title, split it.
+3. **Order the sections so each builds on the last.** Introduce a thing before any
+   section that uses it. The usual order is:
+   1. The core new piece first.
+   2. Then the shared wrappers and infrastructure that use it.
+   3. Then each consumer.
+   4. Then supporting changes and copy.
+
+   Break the usual order when the story needs it, for example a bug fix that reads
+   best as "the symptom, the cause, the fix, the tests that pin it".
+4. **Write a bridge for every section after the first.** One sentence that hands over
+   from the section before: what the reader now knows, and what this section adds.
+   For example: "With `withRetry` in place, the client can lean on it. The one real
+   change is deciding what counts as a failure." The first section's bridge says why
+   the story starts there. The builder warns when a bridge is missing.
+5. **Read the section titles and bridges in order, alone.** They should tell the whole
+   story without the diffs. If one jumps or repeats, reorder, merge or split.
+
+Keep sections small. A section past about 8 files or 400 changed lines usually holds
+more than one idea, and the builder warns about it. Split it along the story, for
+example "the new state" and then "the components that read it". A big consumer can
+take two sections: "how `Editor` loads drafts" and then "how `Editor` saves them".
 
 Inside a section, list source files first, then tests, then stories. A consumer's
 source, test, story and small call-site changes share one section. Deleted files go
@@ -111,6 +138,7 @@ The parts, in the order to write them:
 - **`state`.** Wherever the change adds or changes state, model it as a finite state
   machine. Sections get their own `state`; the overview's `state` holds the main
   machines across the change. See "State machines" below.
+- **Section `bridge`.** One sentence handing over from the section before. See step 3.
 - **Section `lead` and `changes`.** Sort into Added, Modified and Deleted, and tag each
   High, Medium or Low. Name the real functions. State the concrete behaviour, including
   any threshold or default that moved from old to new.
@@ -122,6 +150,11 @@ The parts, in the order to write them:
 
 Define library and framework terms in one clause the first time they appear, for
 example "RTK Query cache". Readers ask.
+
+Write for a person reading the page, not for a parser. Follow the readability rules in
+`references/config.md`: one idea per paragraph, item or note, short sentences, plain
+words, and the point first. Break anything complex into small steps the reader can
+check one at a time, with a diagram where a picture is clearer than prose.
 
 Never draw diagrams as ASCII art, hand-written SVG or images. There are three kinds:
 
@@ -230,6 +263,10 @@ The builder fails on any of these:
 Fix the config and rebuild.
 
 Before publishing:
+
+- Read the page top to bottom as the reviewer would. Check the story flows from
+  section to section, and that no section, note or caption is a wall of text. Split
+  or cut anything that is.
 
 - Check every claim in the notes against the code. Each pass so far has caught a few
   wrong ones: a misremembered string, a misread condition, a guessed behaviour.
