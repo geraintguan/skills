@@ -448,7 +448,7 @@ function renderTests(g) {
       <td class="tname"><a href="#${fileId(x.file)}">${esc(x.name)}</a><span class="tfile">${esc(splitPath(x.file)[1])}</span></td>
       <td><span class="ttype">${x.type}</span></td>
       <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
-  return `<details class="tests-card" open><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
+  return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
     <div class="tests-scroll"><table class="tests"><thead><tr><th>Change</th><th>Test</th><th>Type</th><th>Inputs</th><th>Expected output</th><th>Why</th></tr></thead>
     <tbody>${rows}</tbody></table></div></details>`;
 }
