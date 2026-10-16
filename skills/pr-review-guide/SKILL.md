@@ -103,7 +103,7 @@ example "RTK Query cache". Readers ask.
 Draw every diagram with [Mermaid](https://mermaid.js.org/), never ASCII art, hand-written
 SVG or images. The overview diagram goes in `overview.diagram`. Anywhere else (a file
 note, a line note, a change item), put the source in `<pre class="mermaid">…</pre>`
-inside the HTML. The page loads mermaid.js, themes it to match light and dark, and
+inside the HTML. The page loads mermaid.js, themes it to match the page, and
 renders each diagram when it scrolls into view. Pick the diagram type that fits:
 `flowchart` for what uses what, `sequenceDiagram` for call or event order,
 `stateDiagram-v2` for state changes, `erDiagram` for schema changes.
@@ -168,6 +168,6 @@ every future guide gets the change.
 
 - `scripts/build.py`: checks the config and renders the page from the template.
 - `scripts/tests_inventory.py`: lists the tests changed per file.
-- `assets/template.html`: the page layout, styles and behaviour, with light and dark themes.
+- `assets/template.html`: the page layout, styles and behaviour, always in dark mode.
 - `assets/example-config.json`: a made-up example that uses every key.
 - `references/config.md`: the config schema and the rules for writing the content.

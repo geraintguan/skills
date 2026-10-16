@@ -5,33 +5,15 @@
 <style>
 /* Layout: sticky review checklist on the left, grouped file diffs on the right; one column on phones. */
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --fg: #1d2330; --muted: #5d6676; --line: #dfe3ea; --soft: #eef1f5;
-  --accent: #2f5bd3; --accent-soft: #e6ecfb;
-  --add-bg: #e7f6ec; --add-gutter: #cdeed7; --add-fg: #1a7f3c;
-  --del-bg: #fcebec; --del-gutter: #f6d3d6; --del-fg: #b42335;
-  --hunk-bg: #eef2fb; --hunk-fg: #4b5a7a;
-  --imp-high: #b42335; --imp-high-bg: #fcebec; --imp-med: #9a5b00; --imp-med-bg: #fdf1dc; --imp-low: #4b5a7a; --imp-low-bg: #eef1f5;
-  --hl-kw: #8a3fb8; --hl-str: #0b7a52; --hl-num: #b25b00; --hl-com: #7c8595; --hl-fn: #2f5bd3; --hl-type: #a3366b; --hl-attr: #9a5b00; --hl-tag: #b42335;
+  --bg: #12151b; --panel: #191d25; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2a303b; --soft: #20252e;
+  --accent: #7ea2ff; --accent-soft: #232d45;
+  --add-bg: #14281c; --add-gutter: #1b3826; --add-fg: #6fd391;
+  --del-bg: #2c171b; --del-gutter: #3f1e24; --del-fg: #ff8b98;
+  --hunk-bg: #1c2333; --hunk-fg: #9fb0d4;
+  --imp-high: #ff8b98; --imp-high-bg: #3a1a20; --imp-med: #f2c27a; --imp-med-bg: #33270f; --imp-low: #9fb0d4; --imp-low-bg: #20252e;
+  --hl-kw: #d39bff; --hl-str: #7fd6a8; --hl-num: #ffb86b; --hl-com: #7d8696; --hl-fn: #8fb2ff; --hl-type: #ff9cc8; --hl-attr: #f2c27a; --hl-tag: #ff8b98;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #12151b; --panel: #191d25; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2a303b; --soft: #20252e;
-  --accent: #7ea2ff; --accent-soft: #232d45;
-  --add-bg: #14281c; --add-gutter: #1b3826; --add-fg: #6fd391;
-  --del-bg: #2c171b; --del-gutter: #3f1e24; --del-fg: #ff8b98;
-  --hunk-bg: #1c2333; --hunk-fg: #9fb0d4;
-  --imp-high: #ff8b98; --imp-high-bg: #3a1a20; --imp-med: #f2c27a; --imp-med-bg: #33270f; --imp-low: #9fb0d4; --imp-low-bg: #20252e;
-  --hl-kw: #d39bff; --hl-str: #7fd6a8; --hl-num: #ffb86b; --hl-com: #7d8696; --hl-fn: #8fb2ff; --hl-type: #ff9cc8; --hl-attr: #f2c27a; --hl-tag: #ff8b98;
-  color-scheme: dark; } }
-:root[data-theme="dark"] {
-  --bg: #12151b; --panel: #191d25; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2a303b; --soft: #20252e;
-  --accent: #7ea2ff; --accent-soft: #232d45;
-  --add-bg: #14281c; --add-gutter: #1b3826; --add-fg: #6fd391;
-  --del-bg: #2c171b; --del-gutter: #3f1e24; --del-fg: #ff8b98;
-  --hunk-bg: #1c2333; --hunk-fg: #9fb0d4;
-  --imp-high: #ff8b98; --imp-high-bg: #3a1a20; --imp-med: #f2c27a; --imp-med-bg: #33270f; --imp-low: #9fb0d4; --imp-low-bg: #20252e;
-  --hl-kw: #d39bff; --hl-str: #7fd6a8; --hl-num: #ffb86b; --hl-com: #7d8696; --hl-fn: #8fb2ff; --hl-type: #ff9cc8; --hl-attr: #f2c27a; --hl-tag: #ff8b98;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -529,7 +511,7 @@ function mermaidTheme() {
   const css = getComputedStyle(document.documentElement);
   const v = (name) => css.getPropertyValue(name).trim();
   return {
-    darkMode: css.colorScheme.includes("dark"),
+    darkMode: true,
     background: v("--panel"), fontFamily: v("--sans"), fontSize: "13px",
     primaryColor: v("--accent-soft"), primaryBorderColor: v("--accent"), primaryTextColor: v("--fg"),
     secondaryColor: v("--soft"), tertiaryColor: v("--panel"),
