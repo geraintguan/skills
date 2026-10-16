@@ -272,10 +272,6 @@ Before publishing:
   wrong ones: a misremembered string, a misread condition, a guessed behaviour.
 - Run a syntax check on the page script: pull out the last inline `<script>` and run
   `node --check` on it.
-- Open the page and check that every diagram renders. A Mermaid syntax error shows
-  as an error box in place of the diagram. If a diagram library fails at runtime, a
-  warning banner appears under the header and the diagram shows "This diagram couldn't
-  be drawn". See "Library version drift" below.
 
 Publish the HTML with the Artifact tool. Give the page a short `<title>` that names the
 change; the config's `title` key sets it. Republish to the same file path on every
@@ -297,7 +293,7 @@ When a user reports the banner, fix the template, not the one page:
 2. Bump the pinned URLs in `MERMAID_URL` or `XYFLOW_URLS` to versions that work
    together. When React's version changes, list the React URLs that jsDelivr's builds
    import, and point each one at the single pinned copy in the import map.
-3. Rebuild the guide and check that every diagram renders with no banner.
+3. Rebuild and republish the guide, and ask the user to confirm the banner is gone.
 
 ### 7. Handle feedback
 
