@@ -68,8 +68,7 @@ branch's commits vs. the default branch → else the whole tracked codebase.
 ## Layout
 
 ```
-.claude-plugin/plugin.json              # plugin manifest
-.claude-plugin/marketplace.json         # marketplace listing (this repo)
+.claude-plugin/marketplace.json         # marketplace listing: one plugin per skill
 skills/comment-cleaner/SKILL.md         # the skill
 skills/comment-cleaner/scripts/scope.sh # scope resolver (git + sh)
 skills/pr-review-guide/SKILL.md         # the review-guide skill
@@ -95,13 +94,42 @@ artifact. A reviewer can go through it in order and miss nothing. The page has:
   sections collapse, in the page and the sidebar.
 
 Ask for it in plain words ("make an artifact to help me review PR #123") or run
-`/pr-review-guide`.
+the slash command.
+
+## Install
+
+Same two options as comment-cleaner.
+
+### Option A — Claude Code plugin
+
+From inside Claude Code:
+
+```
+/plugin marketplace add geraintguan/skills
+/plugin install pr-review-guide@geraintguan-skills
+```
+
+Invoke it with `/pr-review-guide:pr-review-guide`.
+
+### Option B — skills.sh / `skills` CLI
 
 ```bash
+# Install the pr-review-guide skill into the current project (./.claude/skills/)
+npx skills add geraintguan/skills --skill pr-review-guide
+
+# Install globally for your user (~/.claude/skills/) and target Claude Code
 npx skills add geraintguan/skills --skill pr-review-guide -g -a claude-code -y
 ```
 
-Try it on the bundled demo:
+Or straight from the subdirectory:
+
+```bash
+npx skills add https://github.com/geraintguan/skills/tree/main/skills/pr-review-guide
+```
+
+## Try it
+
+Build a guide from the bundled demo:
 
 ```bash
 sh skills/pr-review-guide/assets/demo/make_repo.sh /tmp/pr-review-guide-demo
