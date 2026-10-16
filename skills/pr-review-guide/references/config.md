@@ -3,9 +3,11 @@
 `scripts/build.py config.json out.html` reads one JSON object. All HTML fields are
 inserted as-is, so escape `<` in prose as `&lt;` and wrap identifiers in `<code>`.
 
-Every diagram is [Mermaid](https://mermaid.js.org/). Outside `overview.diagram`, embed
-one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. Escape
-`<` in its labels as `&lt;`.
+A diagram is a `graph` (JSON nodes and edges, drawn with React Flow), a `machine` (an
+interactive finite state machine, also React Flow), or [Mermaid](https://mermaid.js.org/)
+source. See "Diagrams". Outside the `diagram` and
+`graph` keys, embed Mermaid in any HTML field as
+`<pre class="mermaid">flowchart LR\n  A --> B</pre>`. Escape `<` in its labels as `&lt;`.
 
 ## Top level
 
@@ -32,9 +34,12 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 |---|---|
 | `summary` | HTML paragraphs. The first says what the change does and why. The second says how it's built. |
 | `before`, `after` | HTML bullets. Parallel lists: each "after" bullet answers a "before" bullet. |
-| `diagram` | Mermaid source, usually `flowchart TD`. Arrows go from a component to what it uses. Group with `subgraph`. Keep it under about 20 nodes. |
+| `graph` | The architecture as a graph (see "Diagrams"). Edges go from a component to what it uses. Group nodes by area, tag what the PR adds, changes or removes, and link each node to its code. Keep it under about 20 nodes. |
+| `diagram` | Mermaid source instead of `graph`, usually `flowchart TD`. Use `graph` unless you need a Mermaid-only feature. |
+| `diagram_links` | With `diagram`: `{nodeId: target}` making Mermaid nodes clickable. See "Links". |
 | `diagram_caption` | One HTML line on how to read the diagram, and which parts are generic. |
-| `data_flow` | A list of flows, each `{title, diagram, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
+| `state` | A list of flows `{title, machine, caption}`: the main state machines the change touches. Shown under "State". See "State machines". |
+| `data_flow` | A list of flows, each `{title, diagram or graph or machine, links, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
 | `decisions` | HTML bullets for design decisions. Mark the ones the user made with `<em>(your call)</em>`. |
 
@@ -49,7 +54,8 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 | `files` | Paths, or `{path, note, lines}` objects, ordered source → tests → stories. |
 | `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
-| `data_flow` | A list of flows `{title, diagram, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
+| `state` | A list of flows `{title, machine, caption}` for the state this section adds or changes, shown in a State card under the data flow. See "State machines". |
+| `data_flow` | A list of flows `{title, diagram or graph or machine, links, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
 
 ### Data flow
@@ -64,11 +70,92 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 
 - Show what moves, in order: arguments, requests, events, cache or store reads and
   writes, return values and errors. The architecture diagram already covers what uses what.
-- Use `sequenceDiagram` unless another type reads better, such as `flowchart LR` for a
-  one-way pipeline or `stateDiagram-v2` for state driven by data.
+- Use `sequenceDiagram` unless a `flowchart LR` reads better for a one-way pipeline.
+  Put state driven by data in `state` as a `machine`.
 - Use real names for participants and messages. Mark what this PR adds or changes,
   with `Note over X: new` or the caption.
 - The overview flow stays at the component level. A section flow zooms in on its own files.
+
+### Diagrams
+
+Every diagram renders in a stage with zoom, fit and full-screen buttons. Readers drag to
+pan and pinch or Ctrl/⌘ + scroll to zoom; plain scrolling still scrolls the page.
+Hovering a node dims everything it isn't connected to.
+
+**Graph** (React Flow, laid out by dagre):
+
+```json
+"graph": {
+  "direction": "LR",
+  "nodes": [
+    {"id": "getJson", "label": "getJson", "detail": "src/client.ts", "group": "Client", "status": "changed", "link": "src/client.ts"},
+    {"id": "withRetry", "label": "withRetry", "detail": "src/retry.ts", "group": "Retry helper", "status": "added", "link": "retry"}
+  ],
+  "edges": [{"from": "getJson", "to": "withRetry", "label": "3 attempts", "status": "added"}]
+}
+```
+
+- `direction`: `TB` (default), `LR`, `BT` or `RL`.
+- Node: `id` and `label` are required, and labels are plain text. `detail` is a second,
+  smaller line, such as the file. Nodes with the same `group` are boxed together.
+  `status` is `added`, `changed` or `removed`. `link` is a link target.
+- Edge: `from` and `to` are node ids. `label` is plain text. `status` colours the edge.
+  `added` and `changed` edges animate unless `animated` is `false`.
+- Readers can drag nodes. Graphs with more than eight nodes get a minimap.
+
+**Mermaid:**
+
+- A `sequenceDiagram` gets play, step and "show all" buttons that walk through its
+  messages in order. Clicking a message jumps to it.
+- In a `flowchart` or `stateDiagram-v2`, tag nodes `:::added`, `:::changed` or
+  `:::removed`. The page defines those classes and shows a legend.
+- Animate a new path in a flowchart with an edge id: `A e1@--> B` and then
+  `e1@{ animate: true }`.
+
+### State machines
+
+```json
+"state": [{
+  "title": "One <code>withRetry</code> call",
+  "machine": {
+    "initial": "attempting",
+    "states": [
+      {"id": "attempting", "label": "Attempting", "detail": "await fn()", "link": "src/retry.ts"},
+      {"id": "waiting", "label": "Waiting", "detail": "sleep backoffDelay(n)", "status": "added"},
+      {"id": "resolved", "label": "Resolved", "final": true},
+      {"id": "failed", "label": "Failed", "final": true}
+    ],
+    "transitions": [
+      {"from": "attempting", "to": "resolved", "event": "fn resolves"},
+      {"from": "attempting", "to": "waiting", "event": "rejects, attempts left", "status": "added"},
+      {"from": "waiting", "to": "attempting", "event": "delay elapsed", "status": "added"},
+      {"from": "attempting", "to": "failed", "event": "rejects on last attempt"}
+    ]
+  },
+  "caption": "Waiting is new."
+}]
+```
+
+- `initial` is a state id. It defaults to the first state.
+- State: `id` and `label` are required. `detail`, `group`, `status` and `link` work as
+  on graph nodes. `final: true` draws a double border.
+- Transition: `from`, `to` and `event` are required, and `status` is optional. A
+  transition from a state to itself shows on the state's card as "↻ event".
+- `direction` defaults to `LR`.
+- The page starts in `initial`. A panel under the diagram shows the current state and a
+  button for each event out of it. Clicking a state or an event moves there, and the
+  transitions out of the current state animate. A state's code link is its "code ↗"
+  button, because clicking the state moves to it.
+
+### Links
+
+A link target is a section `id`, a changed file's path, or `overview`. Clicking the node
+opens that section or file and scrolls to it. Graph nodes take `link`. Mermaid diagrams
+take `links` on the flow (or `diagram_links` on the overview), as `{nodeId: target}`,
+where `nodeId` is the id in the Mermaid source, such as `R` in `R["withRetry"]`. The
+builder fails on an unknown target or a node id that isn't in the source. Link the
+nodes a reader would want to read next. Inline `<pre class="mermaid">` blocks can't
+have links.
 
 ### Impact levels
 

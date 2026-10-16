@@ -3,7 +3,10 @@ name: pr-review-guide
 description: >-
   Builds an interactive review guide for a pull request or branch diff and publishes
   it as an artifact. The guide has a high-level overview (summary, before/after,
-  architecture diagram, data flow diagrams, code layout, key decisions). Sections
+  an interactive architecture graph, data flow diagrams, interactive state machines,
+  code layout, key decisions). Every diagram can be panned, zoomed and opened full screen;
+  nodes link to their code, sequence diagrams play their messages step by step, and
+  state machines can be clicked through event by event. Sections
   follow review order, each with its own data flow diagram and its changes listed as
   Added / Modified / Deleted with High / Medium / Low impact tags. Each changed test
   file gets a table of the tests it changed. Diffs are syntax-highlighted, with
@@ -26,17 +29,26 @@ From top to bottom:
 
 1. **Header.** Title, PR link, line counts, the tokens and estimated cost of building
    the guide, and legends for impact levels and test types.
-2. **Overview.** Summary, before/after cards, a mermaid architecture diagram, the
-   high-level data flow across the whole change, a code-layout table, and key decisions.
+2. **Overview.** Summary, before/after cards, an interactive architecture graph, the
+   high-level data flow across the whole change, the main state machines it touches, a
+   code-layout table, and key decisions.
 3. **Sections, in review order.** Each section has:
    - a caret, plus counts per impact level
    - a one-line lead saying where to start
    - collapsible Added / Modified / Deleted lists, where every item has an impact tag
    - a Data flow card: how data moves through this section's part of the change
+   - a State card, when the section adds or changes state: its finite state machine
    - its files' diffs, with an "About this file" note and inline line notes
    - on each test file, above its diff, a Tests table, collapsed by default: change,
      test name, Unit / Integration / E2E, inputs, expected output, and why the test changed
-4. **Sidebar and toolbar.** The sidebar lists every file, has collapsible sections, and
+4. **Diagrams.** Each one sits in a stage you can drag to pan, pinch or Ctrl/⌘ + scroll
+   to zoom, and open full screen. Hovering a node dims everything it isn't connected
+   to. Nodes with a link jump to their section or file. Sequence diagrams have play
+   and step buttons that walk through the messages in order. Flowchart edges can be
+   animated, and nodes tagged added, changed or removed get matching colours. State
+   machines start in their initial state; clicking a state or one of its events moves
+   there, and the transitions out of the current state animate.
+5. **Sidebar and toolbar.** The sidebar lists every file, has collapsible sections, and
    shows progress. The toolbar has hide tests/stories, hide line notes, and expand or
    collapse all.
 
@@ -88,12 +100,17 @@ in the user's repo.
 
 The parts, in the order to write them:
 
-- **Overview.** Say what the change does and why, before and after. The diagram shows
-  what uses what, with a one-line caption. The data flow shows how data moves across
+- **Overview.** Say what the change does and why, before and after. The architecture
+  `graph` shows what uses what, with a one-line caption. Tag each node and edge the PR
+  adds, changes or removes, group nodes by area, and link each node to its section or
+  file. The data flow shows how data moves across
   the whole change (see below). The layout table has the paths and what each does in
   this PR. Decisions mark the ones the user made.
 - **Section `data_flow`.** Every section gets one, focused on that section only. See
   "Data flow diagrams" below.
+- **`state`.** Wherever the change adds or changes state, model it as a finite state
+  machine. Sections get their own `state`; the overview's `state` holds the main
+  machines across the change. See "State machines" below.
 - **Section `lead` and `changes`.** Sort into Added, Modified and Deleted, and tag each
   High, Medium or Low. Name the real functions. State the concrete behaviour, including
   any threshold or default that moved from old to new.
@@ -106,13 +123,26 @@ The parts, in the order to write them:
 Define library and framework terms in one clause the first time they appear, for
 example "RTK Query cache". Readers ask.
 
-Draw every diagram with [Mermaid](https://mermaid.js.org/), never ASCII art, hand-written
-SVG or images. The overview diagram goes in `overview.diagram`. Anywhere else (a file
-note, a line note, a change item), put the source in `<pre class="mermaid">…</pre>`
-inside the HTML. The page loads mermaid.js, themes it to match the page, and
-renders each diagram when it scrolls into view. Pick the diagram type that fits:
-`flowchart` for what uses what, `sequenceDiagram` for call or event order,
-`stateDiagram-v2` for state changes, `erDiagram` for schema changes.
+Never draw diagrams as ASCII art, hand-written SVG or images. There are three kinds:
+
+- **`graph`** ([React Flow](https://reactflow.dev/), laid out by
+  [dagre](https://github.com/dagrejs/dagre)): nodes and edges as JSON. Use it for the
+  overview architecture, and for any "what uses what" picture where readers benefit from
+  dragging nodes, a minimap and click-through to code. Nodes can carry a `detail` line,
+  a `group`, a `status` and a `link`. Edges tagged `added` or `changed` animate.
+- **`machine`** (React Flow too): a finite state machine as states and transitions.
+  Readers step through it by clicking states or events. Use it for every state machine.
+- **[Mermaid](https://mermaid.js.org/)** source for everything else: `sequenceDiagram`
+  for call or event order (it gets step-through playback), `erDiagram` for schema
+  changes, and `flowchart` for small pipelines. Use `stateDiagram-v2` only inline in a
+  note, where a `machine` can't go. In a
+  flowchart, tag nodes with `:::added`, `:::changed` or `:::removed`, animate a new path
+  with `A e1@--> B` plus `e1@{ animate: true }`, and set `links` to make nodes clickable.
+
+The overview architecture goes in `overview.graph` (or `overview.diagram` for Mermaid).
+Anywhere else (a file note, a line note, a change item), put Mermaid source in
+`<pre class="mermaid">…</pre>` inside the HTML. The page themes both kinds to match,
+and renders each diagram when it scrolls into view.
 
 #### Data flow diagrams
 
@@ -125,12 +155,34 @@ inputs, calls, events, cache and store reads and writes, responses and errors.
 - **Section `data_flow`:** zoom in on that section. Show the real function, hook or
   endpoint names, what each passes and returns, and where this PR changed the flow.
   Use `alt` for branches (success and error, cache hit and miss) and `loop` for retries
-  and polling. Mark new or changed steps, for example with `Note over X: new`.
-- Use `sequenceDiagram` by default. Use another type only when it reads better: a
-  `flowchart LR` for a pipeline with no back-and-forth, or `stateDiagram-v2` when data
-  drives state changes.
+  and polling. Mark new or changed steps, for example with `Note over X: new`. Keep the
+  messages in the order they happen: the play button walks through them in source order.
+- Use `sequenceDiagram` by default. Use a `flowchart LR` for a pipeline with no
+  back-and-forth. When data drives state changes, model the state in `state` instead.
 - A section where no data moves (copy, renames, config only) sets `data_flow: []`
   and says why in the section `lead`. The builder warns when the key is missing.
+
+#### State machines
+
+Model state as a finite state machine wherever the change has it: a status or phase
+enum, a reducer or store slice, a request lifecycle (idle, loading, success, error), a
+retry or polling loop, a UI mode (closed, open, editing, saving), a job or workflow
+status, a feature-flag rollout stage, or a protocol handshake. Implicit state counts
+too: a pair of booleans like `isLoading` and `hasError` is a machine with four states,
+some of which may be impossible.
+
+- Draw it as a `machine` in the section's `state` (or `overview.state` for one that
+  spans sections). Use the real state names from the code and the real events or
+  actions as transition labels, such as `FETCH_SUCCEEDED` or `user clicks Save`.
+- Mark `initial` and every `final` state. Tag the states and transitions this PR adds,
+  changes or removes. Link each state to the file that handles it.
+- Show the whole machine, not only the new part, so a reviewer can check every state
+  has a way out and nothing reaches a state it shouldn't. Say in the caption what the
+  PR changed, and any transition that is missing or unguarded. Tell the user about
+  those gaps too.
+- Model the states the code really has, and say so when the machine is implicit,
+  for example "derived from `isLoading` and `error`".
+- Skip it only when nothing in the section holds state.
 
 ### 5. Describe the tests
 
@@ -172,6 +224,8 @@ The builder fails on any of these:
 - a line note outside the diff
 - an unknown change type, impact level or test type
 - a test row for a file outside its section
+- a graph node or edge that names an unknown node, or a bad status or direction
+- a diagram link to something that isn't a section id, a file in a section, or `overview`
 
 Fix the config and rebuild.
 
@@ -182,7 +236,8 @@ Before publishing:
 - Run a syntax check on the page script: pull out the last inline `<script>` and run
   `node --check` on it.
 - Open the page and check that every diagram renders. A Mermaid syntax error shows
-  as an error box in place of the diagram.
+  as an error box in place of the diagram. A graph that fails to load logs a
+  `diagram` error in the console and leaves an empty box.
 
 Publish the HTML with the Artifact tool. Give the page a short `<title>` that names the
 change; the config's `title` key sets it. Republish to the same file path on every
@@ -203,6 +258,10 @@ every future guide gets the change.
 - `scripts/usage.py`: totals the tokens and estimated cost of building the guide. The
   builder calls it; run it alone to inspect the numbers.
 - `assets/template.html`: the page layout, styles and behaviour, always in dark mode.
+  It loads Mermaid from cdnjs and React Flow, React and dagre from jsDelivr, only when a
+  page has diagrams of that kind.
+- `assets/xyflow.css`: React Flow's stylesheet. The builder inlines it only into pages
+  with a `graph`, because artifacts can't load stylesheets from a CDN.
 - `assets/example-config.json`: a made-up example that uses every key, with
   `assets/example-usage.json` as its usage file.
 - `references/config.md`: the config schema and the rules for writing the content.

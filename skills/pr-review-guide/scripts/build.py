@@ -20,21 +20,29 @@ Config keys:
             tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
                      inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
-            data_flow: [{title?, diagram: mermaid source, caption?: HTML}]  how data moves through this
-                       section's change, usually a sequenceDiagram; [] opts out, a missing key warns
+            data_flow: [{title?, diagram: mermaid source | graph: Graph | machine: Machine, links?, caption?: HTML}]
+                       how data moves through this section's change, usually a sequenceDiagram; [] opts out, a missing key warns
+            state: [same flow shape, usually a machine]  the state this section adds or changes, shown in a State card
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
   overview (optional, rendered first): {
     summary: [HTML paragraphs: what the change does and why],
     before: [HTML bullets], after: [HTML bullets],
-    diagram: mermaid source for the architecture, diagram_caption: HTML,
-    data_flow: [{title?, diagram, caption?}]  # high-level data flow across the whole change
+    graph: Graph for the architecture (or diagram: mermaid source, diagram_links), diagram_caption: HTML,
+    data_flow: [{title?, diagram | graph | machine, links?, caption?}]  # high-level data flow across the whole change
+    state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [HTML bullets: key design decisions and who made them]
   }
+  Graph (rendered with React Flow): {direction?: "TB"|"LR"|"BT"|"RL",
+    nodes: [{id, label, detail?, group?, status?: "added"|"changed"|"removed", link?}],
+    edges: [{from, to, label?, status?, animated?}]}
+  Machine (an interactive finite state machine, drawn with React Flow): {direction?, initial?: state id (default the first),
+    states: [{id, label, detail?, group?, status?, link?, final?}], transitions: [{from, to, event, status?}]}
+  links (mermaid) / link (graph node or state): a section id, a file path in a section, or "overview"; the node jumps there
 Diagrams anywhere else go in HTML fields as <pre class="mermaid">source</pre>.
 The script fails if a changed file is in no group and not skipped.
 """
-import html, json, subprocess, sys, pathlib
+import html, json, re, subprocess, sys, pathlib
 from collections import defaultdict
 from typing import Any, Optional
 
@@ -69,19 +77,91 @@ def diff_lines(d):
             shown["old"].add(o); shown["new"].add(n); o += 1; n += 1
     return shown
 
-Flow = dict[str, str]
+Flow = dict[str, Any]
+STATUSES = (None, "added", "changed", "removed")
+
+DIAGRAM_KINDS = ("diagram", "graph", "machine")
 
 def check_flows(where: str, flows: list[Flow]) -> list[Flow]:
     for flow in flows:
-        if not isinstance(flow, dict) or not str(flow.get("diagram", "")).strip():
-            sys.exit(f"{where}: each data_flow needs a mermaid diagram")
+        if not isinstance(flow, dict) or sum(kind in flow for kind in DIAGRAM_KINDS) != 1:
+            sys.exit(f"{where}: each flow needs exactly one of a mermaid diagram, a graph or a machine")
+        if "diagram" in flow and not str(flow["diagram"]).strip():
+            sys.exit(f"{where}: empty mermaid diagram")
     return flows
 
-def render_flow(flow: Flow) -> str:
+# Diagram links name a section id, a file path in a section, or "overview"; the page turns them into anchors.
+link_targets = {"overview", *(g["id"] for g in cfg["groups"]),
+                *(e if isinstance(e, str) else e["path"] for g in cfg["groups"] for e in g["files"])}
+
+def check_link(where: str, target: str) -> str:
+    if target not in link_targets:
+        sys.exit(f"{where}: link target {target!r} is not a section id, a file in a section, or 'overview'")
+    return target
+
+def check_graph_nodes(where: str, nodes: list[dict[str, Any]]) -> set[str]:
+    ids = {n.get("id") for n in nodes}
+    if not nodes or len(ids) != len(nodes) or None in ids or not all(n.get("label") for n in nodes):
+        sys.exit(f"{where}: a graph needs nodes, each with a unique id and a label")
+    return ids
+
+def check_graph_edges(where: str, edges: list[dict[str, Any]], ids: set[str]) -> None:
+    for e in edges:
+        if e.get("from") not in ids or e.get("to") not in ids:
+            sys.exit(f"{where}: graph edge {e.get('from')} -> {e.get('to')} names an unknown node")
+
+def check_statuses(where: str, items: list[dict[str, Any]]) -> None:
+    for item in items:
+        if item.get("status") not in STATUSES:
+            sys.exit(f"{where}: graph status must be added, changed or removed: {item}")
+
+def check_graph(where: str, graph: dict[str, Any]) -> dict[str, Any]:
+    """Validates a React Flow graph, including each node's link."""
+    nodes, edges = graph.get("nodes") or [], graph.get("edges") or []
+    if graph.get("direction", "TB") not in ("TB", "LR", "BT", "RL"):
+        sys.exit(f"{where}: graph direction must be TB, LR, BT or RL")
+    check_graph_edges(where, edges, check_graph_nodes(where, nodes))
+    check_statuses(where, nodes + edges)
+    for n in nodes:
+        if n.get("link"):
+            check_link(f"{where} node {n['id']}", n["link"])
+    return graph
+
+def transition_edge(where: str, t: dict[str, Any]) -> dict[str, Any]:
+    if not t.get("event"):
+        sys.exit(f"{where}: every machine transition needs an event")
+    edge = {"from": t.get("from"), "to": t.get("to"), "label": t["event"]}
+    return {**edge, "status": t["status"]} if "status" in t else edge
+
+def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
+    """A state machine as a graph: states are nodes, transitions are edges labelled with their event."""
+    states = machine.get("states") or [{}]
+    initial = machine.get("initial") or states[0].get("id")
+    if initial not in {st.get("id") for st in states}:
+        sys.exit(f"{where}: machine initial state {initial!r} is not one of its states")
+    return {"direction": machine.get("direction", "LR"), "machine": {"initial": initial},
+            "nodes": [{**st, "initial": st.get("id") == initial} for st in states],
+            "edges": [transition_edge(where, t) for t in machine.get("transitions") or []]}
+
+def render_diagram(where: str, spec: Flow) -> str:
+    """A React Flow placeholder for a graph or machine, else a mermaid block with its click-through links."""
+    if "graph" in spec or "machine" in spec:
+        graph = spec["graph"] if "graph" in spec else machine_graph(where, spec["machine"])
+        data = check_graph(where, graph)
+        return f'<div class="rf-graph" data-graph="{html.escape(json.dumps(data))}"></div>'
+    links = {}
+    for node, target in spec.get("links", {}).items():
+        if not re.search(rf"(?<![\w-]){re.escape(node)}(?![\w-])", spec["diagram"]):
+            sys.exit(f"{where}: linked node {node!r} is not in the diagram")
+        links[node] = check_link(f"{where} node {node}", target)
+    attr = f' data-links="{html.escape(json.dumps(links))}"' if links else ""
+    return f'<pre class="mermaid"{attr}>{html.escape(spec["diagram"])}</pre>'
+
+def render_flow(where: str, flow: Flow) -> str:
     """Title, diagram and caption of one flow, shared by the overview and the sections."""
     title = f'<h4 class="flow-title">{flow["title"]}</h4>' if flow.get("title") else ""
     cap = f'<p class="ov-caption">{flow["caption"]}</p>' if flow.get("caption") else ""
-    return f'{title}<pre class="mermaid">{html.escape(flow["diagram"])}</pre>{cap}'
+    return f'{title}{render_diagram(where, flow)}{cap}'
 
 def check_line_notes(path, d, notes):
     shown = diff_lines(d)
@@ -142,12 +222,20 @@ for g in cfg["groups"]:
     if "data_flow" not in g:
         print(f"warning: section {g['id']} has no data_flow; set it to [] if no data moves", file=sys.stderr)
     flows = check_flows(g["id"], g.get("data_flow", []))
-    groups.append({**g, "files": files, "data_flow": "".join(f"<div>{render_flow(f)}</div>" for f in flows)})
+    machines = check_flows(g["id"], g.get("state", []))
+    groups.append({**g, "files": files, "data_flow": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in flows),
+                   "state": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in machines)})
 
 skips = tuple(cfg.get("skip_prefixes", []))
 missing = [f for f in git("diff", "--name-only", base, head).split() if f not in seen and not f.startswith(skips)]
 if missing:
     sys.exit("changed files in no group:\n  " + "\n  ".join(missing))
+
+def overview_flows(heading: str, flows: list[Flow]) -> str:
+    if not check_flows("overview", flows):
+        return ""
+    return (f'<div><h3>{heading}</h3><div class="ov-flows">'
+            + "".join(f'<div class="ov-diagram">{render_flow("overview", f)}</div>' for f in flows) + "</div></div>")
 
 def render_overview(ov):
     if not ov:
@@ -164,12 +252,10 @@ def render_overview(ov):
         parts.append('<div class="ov-ba">'
                      f'<div class="ov-card before"><h3>Before</h3><ul>{bullets(ov.get("before", []))}</ul></div>'
                      f'<div class="ov-card after"><h3>After</h3><ul>{bullets(ov.get("after", []))}</ul></div></div>')
-    if ov.get("diagram"):
-        cap = f'<p class="ov-caption">{ov["diagram_caption"]}</p>' if ov.get("diagram_caption") else ""
-        parts.append(f'<div><h3>Architecture</h3><div class="ov-diagram"><pre class="mermaid">{html.escape(ov["diagram"])}</pre>{cap}</div></div>')
-    if flows := check_flows("overview", ov.get("data_flow", [])):
-        parts.append('<div><h3>Data flow</h3><div class="ov-flows">'
-                     + "".join(f'<div class="ov-diagram">{render_flow(f)}</div>' for f in flows) + "</div></div>")
+    if ov.get("graph") or ov.get("diagram"):
+        arch = {"graph": ov["graph"]} if ov.get("graph") else {"diagram": ov["diagram"], "links": ov.get("diagram_links", {})}
+        parts.append(f'<div><h3>Architecture</h3><div class="ov-diagram">{render_flow("overview", {**arch, "caption": ov.get("diagram_caption")})}</div></div>')
+    parts += [overview_flows(heading, ov.get(key, [])) for heading, key in (("Data flow", "data_flow"), ("State", "state"))]
     if ov.get("layout"):
         rows = "".join(
             f'<tr><td class="p"><a href="#{r["group"]}">{html.escape(r["path"])}</a></td><td>{r["role"]}</td><td class="s">{stat(r["path"])}</td></tr>'
@@ -212,12 +298,19 @@ def js(value):
 
 build_cost = build_usage()
 meta = cfg.get("meta_extra", []) + ([render_usage(build_cost)] if build_cost else [])
-tpl = (pathlib.Path(__file__).resolve().parent.parent / "assets" / "template.html").read_text()
+assets = pathlib.Path(__file__).resolve().parent.parent / "assets"
+tpl = (assets / "template.html").read_text()
+overview = render_overview(cfg.get("overview"))
+ov_cfg = cfg.get("overview") or {}
+all_flows = [ov_cfg, *ov_cfg.get("data_flow", []), *ov_cfg.get("state", []),
+             *(f for g in cfg["groups"] for f in g.get("data_flow", []) + g.get("state", []))]
+has_graph = any("graph" in f or "machine" in f for f in all_flows)
 for key, value in {
     "__TITLE__": html.escape(cfg["title"]), "__EYEBROW__": cfg["eyebrow"], "__H1__": cfg["h1"],
-    "__LEDE__": cfg["lede"], "__OVERVIEW__": render_overview(cfg.get("overview")), "__PR_URL__": cfg["pr_url"], "__STORE_KEY__": cfg["store_key"],
+    "__LEDE__": cfg["lede"], "__OVERVIEW__": overview, "__PR_URL__": cfg["pr_url"], "__STORE_KEY__": cfg["store_key"],
 }.items():
     tpl = tpl.replace(key, value)
+tpl = tpl.replace("/*__XYFLOW_CSS__*/", (assets / "xyflow.css").read_text() if has_graph else "")
 tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(meta))
 out_path.write_text(tpl)
 print(f"wrote {out_path} ({len(tpl)} bytes, {sum(len(g['files']) for g in groups)} files)")
