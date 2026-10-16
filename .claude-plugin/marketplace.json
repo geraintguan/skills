@@ -4,11 +4,51 @@
     "name": "Geraint Guan",
     "email": "geraint@scalesignal.dev"
   },
+  "metadata": {
+    "description": "Geraint Guan's Claude Code skills: comment-cleaner and pr-review-guide."
+  },
   "plugins": [
     {
       "name": "comment-cleaner",
       "source": "./",
-      "description": "Removes redundant code comments, refactoring names to preserve context."
+      "strict": false,
+      "version": "0.1.0",
+      "description": "Removes redundant code comments, refactoring names to preserve context.",
+      "author": {
+        "name": "Geraint Guan",
+        "email": "geraint@scalesignal.dev"
+      },
+      "keywords": [
+        "comments",
+        "cleanup",
+        "refactor",
+        "code-quality",
+        "git"
+      ],
+      "skills": [
+        "./skills/comment-cleaner"
+      ]
+    },
+    {
+      "name": "pr-review-guide",
+      "source": "./",
+      "strict": false,
+      "version": "0.1.0",
+      "description": "Builds an interactive review guide for a PR or branch diff and publishes it as an artifact.",
+      "author": {
+        "name": "Geraint Guan",
+        "email": "geraint@scalesignal.dev"
+      },
+      "keywords": [
+        "code-review",
+        "pull-request",
+        "diff",
+        "artifact",
+        "git"
+      ],
+      "skills": [
+        "./skills/pr-review-guide"
+      ]
     }
   ]
 }
