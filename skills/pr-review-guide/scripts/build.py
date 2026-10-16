@@ -8,6 +8,8 @@ Config keys:
   repo_root, base (merge-base sha or ref), head (default HEAD)
   title (page <title>, 2-4 words), eyebrow, h1, lede, pr_url, store_key
   meta_extra: list of short HTML strings for the header meta row
+  usage_file: path to scripts/usage.py output (relative to the config). Without it, a build inside a
+              Claude Code session counts the session's tokens and cost itself. Shown in the meta row.
   groups: [{id, title, files: [path | {path, note?, lines?}],
             file note: HTML narrating what the file's change does and why (shown above its diff)
             lines: [{line, side: "new"|"old" (default new), text: HTML, impact?}] inline notes after that line;
@@ -31,13 +33,20 @@ The script fails if a changed file is in no group and not skipped.
 """
 import html, json, subprocess, sys, pathlib
 from collections import defaultdict
+from typing import Any, Optional
 
-cfg = json.loads(pathlib.Path(sys.argv[1]).read_text())
+import usage
+
+cfg_path = pathlib.Path(sys.argv[1])
+cfg = json.loads(cfg_path.read_text())
 out_path = pathlib.Path(sys.argv[2])
 root, base, head = cfg.get("repo_root", "."), cfg["base"], cfg.get("head", "HEAD")
 
 def git(*args):
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
+
+def load_relative_json(path: str) -> Any:
+    return json.loads((cfg_path.parent / path).read_text())
 
 def diff_lines(d):
     """Line numbers shown in the diff, per side."""
@@ -92,7 +101,7 @@ for g in cfg["groups"]:
         ))
     tests = list(g.get("tests", []))
     if g.get("tests_file"):
-        tests += json.loads((pathlib.Path(sys.argv[1]).parent / g["tests_file"]).read_text())
+        tests += load_relative_json(g["tests_file"])
     group_paths = {f["path"] for f in files}
     rows_by_file = defaultdict(list)
     for row in tests:
@@ -148,15 +157,44 @@ def render_overview(ov):
     parts.append("</section>")
     return "".join(parts)
 
+def compact(n: int) -> str:
+    for size, suffix in ((1_000_000, "M"), (1_000, "k")):
+        if n >= size:
+            return f"{n / size:.1f}{suffix}"
+    return str(n)
+
+def build_usage() -> Optional[dict[str, Any]]:
+    """The config's usage_file if set, else this session's usage so far, else None."""
+    if cfg.get("usage_file"):
+        return load_relative_json(cfg["usage_file"])
+    transcript = usage.current_transcript()
+    return usage.collect(transcript) if transcript else None
+
+def render_usage(u: dict[str, Any]) -> str:
+    """Header meta item for the tokens and estimated cost of building this guide."""
+    t = u["tokens"]
+    breakdown = "\n".join([
+        f"{u['requests']} model requests across the main session and {u['subagents']} subagents",
+        f"Input {t['input']:,} · cache write {t['cache_write_5m'] + t['cache_write_1h']:,} · cache read {t['cache_read']:,} · output {t['output']:,}",
+        *(f"{m['model']}: {m['tokens']['total']:,} tokens, "
+          + ("no price" if m["cost_usd"] is None else f"${m['cost_usd']:.2f}") for m in u["by_model"]),
+        f"Estimate at {u['pricing']}.",
+    ])
+    cost = f"~${u['cost_usd']:.2f}" + ("+" if u["unpriced_models"] else "")
+    return (f'<span class="usage" title="{html.escape(breakdown)}">Guide built with '
+            f'<b>{compact(t["total"])}</b> tokens · <b>{cost}</b></span>')
+
 def js(value):
     return json.dumps(value).replace("</", "<\\/")
 
+build_cost = build_usage()
+meta = cfg.get("meta_extra", []) + ([render_usage(build_cost)] if build_cost else [])
 tpl = (pathlib.Path(__file__).resolve().parent.parent / "assets" / "template.html").read_text()
 for key, value in {
     "__TITLE__": html.escape(cfg["title"]), "__EYEBROW__": cfg["eyebrow"], "__H1__": cfg["h1"],
     "__LEDE__": cfg["lede"], "__OVERVIEW__": render_overview(cfg.get("overview")), "__PR_URL__": cfg["pr_url"], "__STORE_KEY__": cfg["store_key"],
 }.items():
     tpl = tpl.replace(key, value)
-tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(cfg.get("meta_extra", [])))
+tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(meta))
 out_path.write_text(tpl)
 print(f"wrote {out_path} ({len(tpl)} bytes, {sum(len(g['files']) for g in groups)} files)")

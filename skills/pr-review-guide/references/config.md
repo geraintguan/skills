@@ -21,6 +21,7 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 | `pr_url` | yes | Link to the PR. Use the compare URL for a plain branch. |
 | `store_key` | yes | localStorage key for review ticks, unique per PR, such as `pr123-reviewed`. |
 | `meta_extra` | no | Short HTML strings for the header meta row, such as "28 machine-translated locales left out" or "Reviews: LGTM". |
+| `usage_file` | no | Path to saved `scripts/usage.py` output, relative to the config. Leave it out: a build in a Claude Code session counts its own tokens and cost. Use it for builds outside a session, such as the example. The header shows the total tokens and estimated cost, with a per-model breakdown on hover. |
 | `skip_prefixes` | no | Changed paths left out on purpose. Name them in `meta_extra`. |
 | `overview` | yes in practice | See below. |
 | `groups` | yes | The sections, in review order. See below. |

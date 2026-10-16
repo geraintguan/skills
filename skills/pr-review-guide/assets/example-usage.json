@@ -1,0 +1,32 @@
+{
+  "since": "2026-10-16T13:41:59.028Z",
+  "transcript": "~/.claude/projects/demo/00000000-0000-0000-0000-000000000000.jsonl",
+  "subagents": 2,
+  "pricing": "Anthropic API list prices, cached 2026-09-25",
+  "requests": 73,
+  "tokens": {
+    "input": 150,
+    "cache_write_5m": 192121,
+    "cache_write_1h": 213707,
+    "cache_read": 12260734,
+    "output": 45468,
+    "total": 12712180
+  },
+  "cost_usd": 6.0324,
+  "unpriced_models": [],
+  "by_model": [
+    {
+      "model": "claude-opus-5-5",
+      "requests": 73,
+      "cost_usd": 6.0324,
+      "tokens": {
+        "input": 150,
+        "cache_write_5m": 192121,
+        "cache_write_1h": 213707,
+        "cache_read": 12260734,
+        "output": 45468,
+        "total": 12712180
+      }
+    }
+  ]
+}
