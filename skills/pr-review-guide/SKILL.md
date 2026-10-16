@@ -3,13 +3,14 @@ name: pr-review-guide
 description: >-
   Builds an interactive review guide for a pull request or branch diff and publishes
   it as an artifact. The guide has a high-level overview (summary, before/after,
-  architecture diagram, code layout, key decisions). Sections follow review order,
-  each listing its changes as Added / Modified / Deleted with High / Medium / Low
-  impact tags. Each changed test file gets a table of the tests it changed. Diffs are
-  syntax-highlighted, with file-level and line-level notes, a reviewed checklist, and
-  collapsing for reviewed sections. Use it whenever the user asks for an artifact,
-  page, guide or walkthrough to help them (or someone else) review a PR, branch,
-  commit range or diff, even if they don't name this skill.
+  architecture diagram, data flow diagrams, code layout, key decisions). Sections
+  follow review order, each with its own data flow diagram and its changes listed as
+  Added / Modified / Deleted with High / Medium / Low impact tags. Each changed test
+  file gets a table of the tests it changed. Diffs are syntax-highlighted, with
+  file-level and line-level notes, a reviewed checklist, and collapsing for reviewed
+  sections. Use it whenever the user asks for an artifact, page, guide or walkthrough
+  to help them (or someone else) review a PR, branch, commit range or diff, even if
+  they don't name this skill.
 ---
 
 # PR review guide
@@ -25,12 +26,13 @@ From top to bottom:
 
 1. **Header.** Title, PR link, line counts, the tokens and estimated cost of building
    the guide, and legends for impact levels and test types.
-2. **Overview.** Summary, before/after cards, a mermaid architecture diagram, a
-   code-layout table, and key decisions.
+2. **Overview.** Summary, before/after cards, a mermaid architecture diagram, the
+   high-level data flow across the whole change, a code-layout table, and key decisions.
 3. **Sections, in review order.** Each section has:
    - a caret, plus counts per impact level
    - a one-line lead saying where to start
    - collapsible Added / Modified / Deleted lists, where every item has an impact tag
+   - a Data flow card: how data moves through this section's part of the change
    - its files' diffs, with an "About this file" note and inline line notes
    - on each test file, above its diff, a Tests table, collapsed by default: change,
      test name, Unit / Integration / E2E, inputs, expected output, and why the test changed
@@ -87,8 +89,11 @@ in the user's repo.
 The parts, in the order to write them:
 
 - **Overview.** Say what the change does and why, before and after. The diagram shows
-  what uses what, with a one-line caption. The layout table has the paths and what each
-  does in this PR. Decisions mark the ones the user made.
+  what uses what, with a one-line caption. The data flow shows how data moves across
+  the whole change (see below). The layout table has the paths and what each does in
+  this PR. Decisions mark the ones the user made.
+- **Section `data_flow`.** Every section gets one, focused on that section only. See
+  "Data flow diagrams" below.
 - **Section `lead` and `changes`.** Sort into Added, Modified and Deleted, and tag each
   High, Medium or Low. Name the real functions. State the concrete behaviour, including
   any threshold or default that moved from old to new.
@@ -108,6 +113,24 @@ inside the HTML. The page loads mermaid.js, themes it to match the page, and
 renders each diagram when it scrolls into view. Pick the diagram type that fits:
 `flowchart` for what uses what, `sequenceDiagram` for call or event order,
 `stateDiagram-v2` for state changes, `erDiagram` for schema changes.
+
+#### Data flow diagrams
+
+Architecture says what uses what. Data flow says what moves where, in what order:
+inputs, calls, events, cache and store reads and writes, responses and errors.
+
+- **Overview `data_flow`:** the end-to-end path through the change, at the level of
+  components and services. One diagram per main journey, such as a read path and a
+  write path. Keep each under about 12 participants.
+- **Section `data_flow`:** zoom in on that section. Show the real function, hook or
+  endpoint names, what each passes and returns, and where this PR changed the flow.
+  Use `alt` for branches (success and error, cache hit and miss) and `loop` for retries
+  and polling. Mark new or changed steps, for example with `Note over X: new`.
+- Use `sequenceDiagram` by default. Use another type only when it reads better: a
+  `flowchart LR` for a pipeline with no back-and-forth, or `stateDiagram-v2` when data
+  drives state changes.
+- A section where no data moves (copy, renames, config only) sets `data_flow: []`
+  and says why in the section `lead`. The builder warns when the key is missing.
 
 ### 5. Describe the tests
 

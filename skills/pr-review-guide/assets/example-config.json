@@ -19,6 +19,11 @@
     "after": ["Three attempts, waiting 200 ms and then 400 ms between them.", "A non-2xx response throws, so it's retried, and the last error is rethrown."],
     "diagram": "flowchart TD\n  C[\"getJson (client.ts)\"] --> R[\"withRetry (retry.ts)\"]\n  R --> B[\"backoffDelay\"]",
     "diagram_caption": "Arrows point from a function to what it calls.",
+    "data_flow": [
+      {"title": "One <code>getJson</code> call",
+       "diagram": "sequenceDiagram\n  participant App as caller\n  participant C as getJson\n  participant R as withRetry\n  participant S as server\n  App->>C: url\n  C->>R: request fn, 3 attempts, 200 ms base\n  loop up to 3 attempts\n    R->>S: fetch(url)\n    alt 2xx\n      S-->>R: JSON body\n    else non-2xx or network error\n      S-->>R: error\n      R->>R: wait backoffDelay(n)\n    end\n  end\n  R-->>C: parsed JSON or last error\n  C-->>App: data, or throws",
+       "caption": "Errors now flow back to the caller instead of arriving as data."}
+    ],
     "layout": [
       {"path": "src/retry.ts", "role": "New generic retry helper.", "group": "retry"},
       {"path": "src/client.ts", "role": "Uses the helper and treats HTTP errors as failures.", "group": "client"}
@@ -30,6 +35,10 @@
       "id": "retry",
       "title": "Retry helper",
       "lead": "Start with the loop in <code>withRetry</code>.",
+      "data_flow": [{
+        "diagram": "sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  participant F as fn\n  C->>R: fn, {attempts, baseDelayMs}\n  loop attempt n = 0 .. attempts - 1\n    R->>F: call\n    alt resolves\n      F-->>R: value\n      R-->>C: value\n    else rejects, not last attempt\n      F-->>R: error\n      R->>R: sleep backoffDelay(n)\n    end\n  end\n  R-->>C: rethrow last error",
+        "caption": "No sleep after the last attempt."
+      }],
       "changes": {
         "added": [
           {"impact": "High", "text": "<code>withRetry</code> runs <code>fn</code> up to <code>attempts</code> times. It sleeps <code>backoffDelay</code> between attempts and rethrows the last error."},
@@ -38,7 +47,7 @@
         "deleted": [{"impact": "Low", "text": "<code>retryThreeTimes</code>. Its only caller moved to <code>withRetry</code>."}]
       },
       "files": [
-        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.<pre class=\"mermaid\">sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  C->>R: fn\n  R->>R: try fn\n  R-->>R: wait backoffDelay(n), retry\n  R-->>C: result or last error</pre>",
+        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.",
          "lines": [
            {"line": 4, "text": "Delay doubles each attempt: 200, 400, 800 ms for a 200 ms base.", "impact": "Low"},
            {"line": 14, "text": "No sleep after the last attempt, so a failure surfaces right away.", "impact": "Medium"}
@@ -56,6 +65,10 @@
       "id": "client",
       "title": "HTTP client",
       "lead": "Check the <code>response.ok</code> guard.",
+      "data_flow": [{
+        "diagram": "sequenceDiagram\n  participant R as withRetry\n  participant C as getJson attempt\n  participant S as server\n  R->>C: run attempt\n  C->>S: fetch(url)\n  S-->>C: response\n  alt response.ok\n    C-->>R: response.json()\n  else not ok\n    C-->>R: throw HTTP status\n  end",
+        "caption": "The <code>response.ok</code> check turns a 500 into a rejection that <code>withRetry</code> retries."
+      }],
       "changes": {
         "modified": [
           {"impact": "High", "text": "<code>getJson</code> throws on non-2xx responses. Before, it parsed and returned error bodies."},

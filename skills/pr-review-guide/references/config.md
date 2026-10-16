@@ -34,6 +34,7 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 | `before`, `after` | HTML bullets. Parallel lists: each "after" bullet answers a "before" bullet. |
 | `diagram` | Mermaid source, usually `flowchart TD`. Arrows go from a component to what it uses. Group with `subgraph`. Keep it under about 20 nodes. |
 | `diagram_caption` | One HTML line on how to read the diagram, and which parts are generic. |
+| `data_flow` | A list of flows, each `{title, diagram, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
 | `decisions` | HTML bullets for design decisions. Mark the ones the user made with `<em>(your call)</em>`. |
 
@@ -48,7 +49,26 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 | `files` | Paths, or `{path, note, lines}` objects, ordered source → tests → stories. |
 | `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
+| `data_flow` | A list of flows `{title, diagram, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
+
+### Data flow
+
+```json
+"data_flow": [{
+  "title": "Saving a draft",
+  "diagram": "sequenceDiagram\n  participant UI as DraftEditor\n  participant H as useSaveDraft\n  participant API as POST /drafts\n  UI->>H: save(text)\n  H->>API: {id, text}\n  alt 200\n    API-->>H: draft\n    H-->>UI: saved\n  else 409\n    API-->>H: conflict\n    Note over H: new: refetch, then retry once\n  end",
+  "caption": "The 409 branch is new."
+}]
+```
+
+- Show what moves, in order: arguments, requests, events, cache or store reads and
+  writes, return values and errors. The architecture diagram already covers what uses what.
+- Use `sequenceDiagram` unless another type reads better, such as `flowchart LR` for a
+  one-way pipeline or `stateDiagram-v2` for state driven by data.
+- Use real names for participants and messages. Mark what this PR adds or changes,
+  with `Note over X: new` or the caption.
+- The overview flow stays at the component level. A section flow zooms in on its own files.
 
 ### Impact levels
 

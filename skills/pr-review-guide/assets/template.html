@@ -113,9 +113,9 @@ tr.hunk td { background: var(--hunk-bg); color: var(--hunk-fg); padding-block: 3
 
 details.tests-card { background: var(--panel); border-bottom: 1px solid var(--line); }
 details.tests-card > summary { list-style: none; cursor: pointer; user-select: none; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
-details.tests-card > summary::-webkit-details-marker { display: none; }
-details.tests-card > summary::before { content: "▸"; display: inline-block; width: 12px; font-size: 12px; color: var(--muted); transition: transform .15s; }
-details.tests-card[open] > summary::before { transform: rotate(90deg); }
+details.tests-card > summary::-webkit-details-marker, details.flow > summary::-webkit-details-marker { display: none; }
+details.tests-card > summary::before, details.flow > summary::before { content: "▸"; display: inline-block; width: 12px; font-size: 12px; color: var(--muted); transition: transform .15s; }
+details.tests-card[open] > summary::before, details.flow[open] > summary::before { transform: rotate(90deg); }
 details.tests-card > summary .ttl { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg); }
 details.tests-card > summary .cnt { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .tests-scroll { overflow-x: auto; border-top: 1px solid var(--line); }
@@ -159,10 +159,16 @@ body.hide-notes tr.anno, body.hide-notes .fnote { display: none; }
 .legend .imp { display: inline-block; width: 64px; margin-right: 4px; }
 section.group.done .changes { background: var(--add-bg); border-color: var(--add-gutter); }
 
+details.flow { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-width: 96ch; }
+details.flow > summary { list-style: none; cursor: pointer; user-select: none; padding: 10px 16px; display: flex; gap: 8px; align-items: center; font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.flow-body { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 12px; overflow-x: auto; }
+.flow-title { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; }
+section.group.done details.flow { border-color: var(--add-gutter); }
+
 .sec-chev { border: none; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font: 15px var(--mono); transition: transform .15s; align-self: center; }
 .sec-chev:hover { color: var(--fg); }
 section.group.collapsed .sec-chev { transform: rotate(-90deg); }
-section.group.collapsed > .file, section.group.collapsed .changes, section.group.collapsed .notes { display: none; }
+section.group.collapsed > .file, section.group.collapsed .changes, section.group.collapsed .flow, section.group.collapsed .notes { display: none; }
 
 .sec-done { display: none; font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--add-fg); background: var(--add-bg); border: 1px solid var(--add-fg); border-radius: 999px; padding: 4px 8px; align-self: center; }
 section.group.done .sec-done { display: inline-block; }
@@ -184,8 +190,9 @@ section.overview h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter
 .ov-card.after { border-top: 3px solid var(--add-fg); }
 .ov-diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
 pre.mermaid { margin-block: 8px; padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; text-align: center; font-family: var(--sans); }
-.ov-diagram pre.mermaid { margin: 0; padding: 0; background: transparent; border: 0; }
+.ov-diagram pre.mermaid, .flow-body pre.mermaid { margin: 0; padding: 0; background: transparent; border: 0; }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.ov-flows { display: flex; flex-direction: column; gap: 12px; }
 .ov-layout { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .ov-layout table { border-collapse: collapse; width: 100%; font-size: 13px; }
 .ov-layout th, .ov-layout td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -443,6 +450,7 @@ function renderMain() {
     s.innerHTML = `<div class="group-head">
         <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)}">▾</button><span class="n">${i + 1}</span>${esc(g.title)} <span class="n">${g.files.length} files · <span class="plus">+${add}</span> <span class="minus">−${rem}</span></span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
+        ${g.data_flow ? `<details class="flow" open><summary>Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}
       </div>`;
     g.files.forEach((f) => s.appendChild(fileCard(f)));
     main.appendChild(s);
