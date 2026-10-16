@@ -3,6 +3,10 @@
 `scripts/build.py config.json out.html` reads one JSON object. All HTML fields are
 inserted as-is, so escape `<` in prose as `&lt;` and wrap identifiers in `<code>`.
 
+Every diagram is [Mermaid](https://mermaid.js.org/). Outside `overview.diagram`, embed
+one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. Escape
+`<` in its labels as `&lt;`.
+
 ## Top level
 
 | Key | Required | What it is |
