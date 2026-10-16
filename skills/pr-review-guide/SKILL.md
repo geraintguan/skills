@@ -30,7 +30,7 @@ From top to bottom:
    - a caret, plus counts per impact level
    - a one-line lead saying where to start
    - collapsible Added / Modified / Deleted lists, where every item has an impact tag
-   - a collapsible Tests table: change, test name, Unit / Integration / E2E, inputs,
+   - a Tests table, collapsed by default: change, test name, Unit / Integration / E2E, inputs,
      expected output, and why the test changed
    - its files' diffs, with an "About this file" note and inline line notes
 4. **Sidebar and toolbar.** The sidebar lists every file, has collapsible sections, and
