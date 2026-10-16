@@ -71,6 +71,7 @@ main { min-width: 0; display: flex; flex-direction: column; gap: 40px; }
 section.group { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 70px; }
 .group-head { display: flex; flex-direction: column; gap: 8px; }
 .group-head h2 { margin: 0; font-size: 19px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.bridge { margin: 0; max-width: 78ch; color: var(--muted); font-size: 14.5px; }
 .group-head h2 .n { font: 500 13px var(--mono); color: var(--muted); }
 .notes { margin: 0; padding: 12px 16px 12px 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-width: 90ch; display: flex; flex-direction: column; gap: 4px; }
 .notes li::marker { color: var(--muted); }
@@ -534,6 +535,7 @@ function renderMain() {
     const add = g.files.reduce((a, f) => a + f.add, 0), rem = g.files.reduce((a, f) => a + f.rem, 0);
     s.innerHTML = `<div class="group-head">
         <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)}">▾</button><span class="n">${i + 1}</span>${esc(g.title)} <span class="n">${g.files.length} files · <span class="plus">+${add}</span> <span class="minus">−${rem}</span></span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
+        ${g.bridge ? `<p class="bridge">${g.bridge}</p>` : ""}
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
         ${g.data_flow ? `<details class="flow" open><summary>Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}
         ${g.state ? `<details class="flow" open><summary>State</summary><div class="flow-body">${g.state}</div></details>` : ""}

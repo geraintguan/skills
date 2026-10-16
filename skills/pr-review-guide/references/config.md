@@ -49,6 +49,7 @@ source. See "Diagrams". Outside the `diagram` and
 |---|---|
 | `id` | A short slug, used for anchors. |
 | `title` | The section name. Gloss jargon in it, for example "DataGrid (the design system)". |
+| `bridge` | One HTML sentence linking this section to the one before it: what the reader now knows, and what this section adds. The first section's bridge says why the story starts here. Shown under the title, even when the section is collapsed. The builder warns when it's missing after the first section. |
 | `lead` | One sentence saying where to start reading. |
 | `changes` | `{added, modified, deleted}`. Each holds a list of `{impact, text}`. Leave out a type with no entries. |
 | `files` | Paths, or `{path, note, lines}` objects, ordered source → tests → stories. |
@@ -219,8 +220,33 @@ table.
 
 ## Writing rules
 
+### Story
+
+- The guide is one story. The overview summary sets it up: the problem, the fix, and
+  the path through the sections. Each section is the next step, and its `bridge` says
+  how it follows from the last one.
+- Introduce a function, type or term before any section relies on it. If a later
+  section needs it first, move that section.
+- Keep each section to one idea. Split a section that needs "and" in its title, or that
+  goes past about 8 files or 400 changed lines.
+- Say what's surprising or risky at the point the reader meets it, not in a list at the
+  end.
+
+### Readability
+
+A person reads this, often between other work. Make every part easy to take in.
+
+- One idea per paragraph, bullet, change item, file note and line note. Split an item
+  that covers two.
+- Keep sentences under about 25 words. Keep a file note to one or two sentences, a
+  line note to one to three, and a caption to one.
+- Break a complex change into steps the reader can check one at a time. A numbered
+  list of steps beats a long paragraph. A diagram beats either when things move or
+  branch.
 - Lead with the point. Use short sentences, active voice and real names.
 - Keep technical terms, and define a library or domain term in one clause the first
   time it appears.
+- Prefer plain words to jargon. When jargon is the right word, define it once.
+- Use the same name for the same thing everywhere: in titles, notes, diagrams and tests.
 - Never claim something you haven't checked in the code. When unsure, read the file.
 - Keep customer and personal data out of the page. It's shareable.

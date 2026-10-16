@@ -49,6 +49,7 @@
     {
       "id": "retry",
       "title": "Retry helper",
+      "bridge": "Everything else builds on one new helper, so read it first.",
       "lead": "Start with the loop in <code>withRetry</code>.",
       "data_flow": [{
         "diagram": "sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  participant F as fn\n  C->>R: fn, {attempts, baseDelayMs}\n  loop attempt n = 0 .. attempts - 1\n    R->>F: call\n    alt resolves\n      F-->>R: value\n      R-->>C: value\n    else rejects, not last attempt\n      F-->>R: error\n      R->>R: sleep backoffDelay(n)\n    end\n  end\n  R-->>C: rethrow last error",
@@ -98,6 +99,7 @@
     {
       "id": "client",
       "title": "HTTP client",
+      "bridge": "With <code>withRetry</code> in place, the client can lean on it. The one real change is deciding what counts as a failure.",
       "lead": "Check the <code>response.ok</code> guard.",
       "data_flow": [{
         "diagram": "sequenceDiagram\n  participant R as withRetry\n  participant C as getJson attempt\n  participant S as server\n  R->>C: run attempt\n  C->>S: fetch(url)\n  S-->>C: response\n  alt response.ok\n    C-->>R: response.json()\n  else not ok\n    C-->>R: throw HTTP status\n  end",

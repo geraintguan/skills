@@ -14,6 +14,7 @@ Config keys:
             file note: HTML narrating what the file's change does and why (shown above its diff)
             lines: [{line, side: "new"|"old" (default new), text: HTML, impact?}] inline notes after that line;
                    the line must appear in the diff (an added/context line for new, removed/context for old)
+            bridge: HTML sentence linking this section to the one before it (the story's next step),
             lead: optional HTML sentence (where to start),
             changes: {added|modified|deleted: [{impact: "High"|"Medium"|"Low", text: HTML}]}}]
           (legacy: note: [HTML strings] renders a plain list when changes is absent)
@@ -173,6 +174,9 @@ def check_line_notes(path, d, notes):
             sys.exit(f"{path}: bad impact {note.get('impact')}")
     return notes
 
+# Past either size a section usually covers more than one idea, which is hard to review in one sitting.
+SECTION_MAX_FILES, SECTION_MAX_LINES = 8, 400
+
 groups, seen = [], set()
 for g in cfg["groups"]:
     files = []
@@ -219,6 +223,10 @@ for g in cfg["groups"]:
         for c in items:
             if c.get("impact") not in ("High", "Medium", "Low"):
                 sys.exit(f"{g['id']}: impact must be High, Medium or Low: {c}")
+    if groups and not g.get("bridge"):
+        print(f"warning: section {g['id']} has no bridge from the section before it", file=sys.stderr)
+    if len(files) > SECTION_MAX_FILES or sum(f["add"] + f["rem"] for f in files) > SECTION_MAX_LINES:
+        print(f"warning: section {g['id']} is large ({len(files)} files); split it if it holds more than one idea", file=sys.stderr)
     if "data_flow" not in g:
         print(f"warning: section {g['id']} has no data_flow; set it to [] if no data moves", file=sys.stderr)
     flows = check_flows(g["id"], g.get("data_flow", []))
