@@ -1,0 +1,26 @@
+{
+  "skill_name": "pr-review-guide",
+  "evals": [
+    {
+      "id": 0,
+      "name": "demo-repo-review-artifact",
+      "prompt": "Can you make me an artifact to help me review the last commit in /tmp/pr-review-guide-demo? (Create it first with `sh assets/demo/make_repo.sh /tmp/pr-review-guide-demo`.)",
+      "expected_output": "Uses base main~1. Writes a config with an overview: a summary, before/after (immediate retries become backoff, and HTTP errors are no longer returned as data), a mermaid diagram, a layout table and decisions. The sections are in review order, retry.ts before client.ts. The deleted legacyRetry.ts is in the retry section. Changes are grouped into Added, Modified and Deleted with High/Medium/Low tags; the response.ok guard is High. Line notes sit on lines that appear in the diff. A Tests table lists backoffDelay's test as Added and Unit, and notes that withRetry is untested. Builds with scripts/build.py without errors, syntax-checks the script and publishes with the Artifact tool.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "pr-with-generated-files",
+      "prompt": "Write up a review guide for PR #482 so I can go through it properly. Half the diff is translated locale files.",
+      "expected_output": "Finds the merge-base from the PR's base branch. Puts generated locale files in skip_prefixes and names them in meta_extra, keeping the source-of-truth locale. Every other changed file is in a section; the builder's missing-file check passes. Test rows come from tests_inventory.py, refined by reading the test bodies, with renames marked 'rename only' and replacements named for removed tests. Notes are checked against the code before publishing.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "feedback-changes-template",
+      "prompt": "On the review guide you made, the sections are too long. Make the Added/Modified/Deleted lists collapsible, and keep it that way for future guides.",
+      "expected_output": "Edits assets/template.html (and build.py if needed) in the skill, not only the generated page. Rebuilds and republishes to the same artifact URL.",
+      "files": []
+    }
+  ]
+}

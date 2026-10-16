@@ -72,4 +72,39 @@ branch's commits vs. the default branch → else the whole tracked codebase.
 .claude-plugin/marketplace.json         # marketplace listing (this repo)
 skills/comment-cleaner/SKILL.md         # the skill
 skills/comment-cleaner/scripts/scope.sh # scope resolver (git + sh)
+skills/pr-review-guide/SKILL.md         # the review-guide skill
+skills/pr-review-guide/scripts/         # build.py (config → page), tests_inventory.py
+skills/pr-review-guide/assets/          # template.html, example-config.json, demo repo script
+skills/pr-review-guide/references/      # config.md (schema and writing rules)
+```
+
+---
+
+# pr-review-guide
+
+Builds an interactive review guide for a pull request or branch diff, published as an
+artifact. A reviewer can go through it in order and miss nothing. The page has:
+
+- **Overview:** summary, before/after, a mermaid architecture diagram, a code-layout
+  table and key decisions.
+- **Sections in review order:** changes grouped as Added / Modified / Deleted, each
+  tagged High / Medium / Low impact, and a table of the tests the section changed
+  (inputs, expected output, why).
+- **Diffs:** syntax-highlighted, with file-level and line-level notes.
+- **Checklist:** reviewed ticks saved in the browser. Reviewed files and finished
+  sections collapse, in the page and the sidebar.
+
+Ask for it in plain words ("make an artifact to help me review PR #123") or run
+`/pr-review-guide`.
+
+```bash
+npx skills add geraintguan/skills --skill pr-review-guide -g -a claude-code -y
+```
+
+Try it on the bundled demo:
+
+```bash
+sh skills/pr-review-guide/assets/demo/make_repo.sh /tmp/pr-review-guide-demo
+python3 skills/pr-review-guide/scripts/build.py \
+  skills/pr-review-guide/assets/example-config.json /tmp/demo-review.html
 ```

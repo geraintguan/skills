@@ -1,0 +1,70 @@
+{
+  "repo_root": "/tmp/pr-review-guide-demo",
+  "base": "main~1",
+  "title": "Retry Backoff Review",
+  "eyebrow": "Pull request #12 · retry-backoff → main",
+  "h1": "Retry failed requests with exponential backoff",
+  "lede": "Read the new retry helper first, then the client that uses it. Tick a file once you've reviewed it; ticks are saved in this browser.",
+  "pr_url": "https://github.com/example/demo/pull/12",
+  "store_key": "demo-pr12-reviewed",
+  "meta_extra": ["Demo data"],
+  "skip_prefixes": [],
+  "overview": {
+    "summary": [
+      "<code>getJson</code> retried three times back to back, and it treated HTTP errors as success. It now retries with exponential backoff and fails on any non-2xx response.",
+      "A new generic helper, <code>withRetry</code>, replaces <code>retryThreeTimes</code>. The client passes its attempts and base delay."
+    ],
+    "before": ["Three immediate retries, with no delay.", "A 500 response was parsed as JSON and returned."],
+    "after": ["Three attempts, waiting 200 ms and then 400 ms between them.", "A non-2xx response throws, so it's retried, and the last error is rethrown."],
+    "diagram": "flowchart TD\n  C[\"getJson (client.ts)\"] --> R[\"withRetry (retry.ts)\"]\n  R --> B[\"backoffDelay\"]",
+    "diagram_caption": "Arrows point from a function to what it calls.",
+    "layout": [
+      {"path": "src/retry.ts", "role": "New generic retry helper.", "group": "retry"},
+      {"path": "src/client.ts", "role": "Uses the helper and treats HTTP errors as failures.", "group": "client"}
+    ],
+    "decisions": ["Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"]
+  },
+  "groups": [
+    {
+      "id": "retry",
+      "title": "Retry helper",
+      "lead": "Start with the loop in <code>withRetry</code>.",
+      "changes": {
+        "added": [
+          {"impact": "High", "text": "<code>withRetry</code> runs <code>fn</code> up to <code>attempts</code> times. It sleeps <code>backoffDelay</code> between attempts and rethrows the last error."},
+          {"impact": "Low", "text": "<code>backoffDelay</code> unit test."}
+        ],
+        "deleted": [{"impact": "Low", "text": "<code>retryThreeTimes</code>. Its only caller moved to <code>withRetry</code>."}]
+      },
+      "files": [
+        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.",
+         "lines": [
+           {"line": 4, "text": "Delay doubles each attempt: 200, 400, 800 ms for a 200 ms base.", "impact": "Low"},
+           {"line": 14, "text": "No sleep after the last attempt, so a failure surfaces right away.", "impact": "Medium"}
+         ]},
+        "src/retry.test.ts",
+        {"path": "src/legacyRetry.ts", "lines": [{"line": 2, "side": "old", "text": "Retried immediately, with no delay."}]}
+      ],
+      "tests": [
+        {"file": "src/retry.test.ts", "name": "backoffDelay › doubles the delay on each attempt", "change": "Added", "type": "Unit",
+         "inputs": "Attempts 0, 1 and 2 with a 100 ms base.", "expected": "<code>[100, 200, 400]</code>.",
+         "why": "Pins the backoff curve. <code>withRetry</code> itself has no test yet, which is a gap."}
+      ]
+    },
+    {
+      "id": "client",
+      "title": "HTTP client",
+      "lead": "Check the <code>response.ok</code> guard.",
+      "changes": {
+        "modified": [
+          {"impact": "High", "text": "<code>getJson</code> throws on non-2xx responses. Before, it parsed and returned error bodies."},
+          {"impact": "Medium", "text": "Uses <code>withRetry</code> with 3 attempts and a 200 ms base delay."}
+        ]
+      },
+      "files": [
+        {"path": "src/client.ts", "note": "The only caller of the retry helper.",
+         "lines": [{"line": 7, "text": "This is the user-visible fix: a 500 is now an error that gets retried.", "impact": "High"}]}
+      ]
+    }
+  ]
+}
