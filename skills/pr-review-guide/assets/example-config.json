@@ -17,8 +17,23 @@
     ],
     "before": ["Three immediate retries, with no delay.", "A 500 response was parsed as JSON and returned."],
     "after": ["Three attempts, waiting 200 ms and then 400 ms between them.", "A non-2xx response throws, so it's retried, and the last error is rethrown."],
-    "diagram": "flowchart TD\n  C[\"getJson (client.ts)\"] --> R[\"withRetry (retry.ts)\"]\n  R --> B[\"backoffDelay\"]",
-    "diagram_caption": "Arrows point from a function to what it calls.",
+    "graph": {
+      "direction": "LR",
+      "nodes": [
+        {"id": "caller", "label": "App code", "detail": "unchanged callers"},
+        {"id": "getJson", "label": "getJson", "detail": "src/client.ts", "group": "Client", "status": "changed", "link": "src/client.ts"},
+        {"id": "withRetry", "label": "withRetry", "detail": "src/retry.ts", "group": "Retry helper", "status": "added", "link": "src/retry.ts"},
+        {"id": "backoff", "label": "backoffDelay", "detail": "src/retry.ts", "group": "Retry helper", "status": "added", "link": "retry"},
+        {"id": "legacy", "label": "retryThreeTimes", "detail": "src/legacyRetry.ts", "status": "removed", "link": "src/legacyRetry.ts"}
+      ],
+      "edges": [
+        {"from": "caller", "to": "getJson"},
+        {"from": "getJson", "to": "withRetry", "label": "3 attempts, 200 ms", "status": "added"},
+        {"from": "withRetry", "to": "backoff", "status": "added"},
+        {"from": "getJson", "to": "legacy", "label": "was", "status": "removed"}
+      ]
+    },
+    "diagram_caption": "Arrows point from a function to what it calls. Click a node to open its code.",
     "data_flow": [
       {"title": "One <code>getJson</code> call",
        "diagram": "sequenceDiagram\n  participant App as caller\n  participant C as getJson\n  participant R as withRetry\n  participant S as server\n  App->>C: url\n  C->>R: request fn, 3 attempts, 200 ms base\n  loop up to 3 attempts\n    R->>S: fetch(url)\n    alt 2xx\n      S-->>R: JSON body\n    else non-2xx or network error\n      S-->>R: error\n      R->>R: wait backoffDelay(n)\n    end\n  end\n  R-->>C: parsed JSON or last error\n  C-->>App: data, or throws",
@@ -38,6 +53,25 @@
       "data_flow": [{
         "diagram": "sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  participant F as fn\n  C->>R: fn, {attempts, baseDelayMs}\n  loop attempt n = 0 .. attempts - 1\n    R->>F: call\n    alt resolves\n      F-->>R: value\n      R-->>C: value\n    else rejects, not last attempt\n      F-->>R: error\n      R->>R: sleep backoffDelay(n)\n    end\n  end\n  R-->>C: rethrow last error",
         "caption": "No sleep after the last attempt."
+      }],
+      "state": [{
+        "title": "One <code>withRetry</code> call",
+        "machine": {
+          "initial": "attempting",
+          "states": [
+            {"id": "attempting", "label": "Attempting", "detail": "await fn()", "link": "src/retry.ts"},
+            {"id": "waiting", "label": "Waiting", "detail": "sleep backoffDelay(n)", "status": "added", "link": "src/retry.ts"},
+            {"id": "resolved", "label": "Resolved", "detail": "returns the value", "final": true},
+            {"id": "failed", "label": "Failed", "detail": "rethrows the last error", "final": true}
+          ],
+          "transitions": [
+            {"from": "attempting", "to": "resolved", "event": "fn resolves"},
+            {"from": "attempting", "to": "waiting", "event": "rejects, attempts left", "status": "added"},
+            {"from": "waiting", "to": "attempting", "event": "delay elapsed", "status": "added"},
+            {"from": "attempting", "to": "failed", "event": "rejects on last attempt"}
+          ]
+        },
+        "caption": "The Waiting state is new: before, a rejection went straight back to Attempting."
       }],
       "changes": {
         "added": [
@@ -68,6 +102,11 @@
       "data_flow": [{
         "diagram": "sequenceDiagram\n  participant R as withRetry\n  participant C as getJson attempt\n  participant S as server\n  R->>C: run attempt\n  C->>S: fetch(url)\n  S-->>C: response\n  alt response.ok\n    C-->>R: response.json()\n  else not ok\n    C-->>R: throw HTTP status\n  end",
         "caption": "The <code>response.ok</code> check turns a 500 into a rejection that <code>withRetry</code> retries."
+      }, {
+        "title": "Where a failed response goes",
+        "diagram": "flowchart LR\n  F[\"fetch(url)\"] --> OK{\"response.ok?\"}\n  OK -->|yes| J[\"response.json()\"]\n  OK e1@-->|no| T[\"throw HTTP status\"]:::added\n  T e2@--> R[\"withRetry\"]\n  e1@{ animate: true }\n  e2@{ animate: true }",
+        "links": {"R": "src/retry.ts", "OK": "src/client.ts"},
+        "caption": "The animated path is new: a non-2xx response now throws, so <code>withRetry</code> retries it."
       }],
       "changes": {
         "modified": [

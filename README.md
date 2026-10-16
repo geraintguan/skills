@@ -84,8 +84,11 @@ skills/pr-review-guide/references/      # config.md (schema and writing rules)
 Builds an interactive review guide for a pull request or branch diff, published as an
 artifact. A reviewer can go through it in order and miss nothing. The page has:
 
-- **Overview:** summary, before/after, a mermaid architecture diagram, high-level
-  data flow diagrams, a code-layout table and key decisions.
+- **Overview:** summary, before/after, an interactive architecture graph (React Flow),
+  high-level data flow diagrams, a code-layout table and key decisions.
+- **Diagrams:** pannable, zoomable and full-screen. Hovering a node traces its
+  connections, nodes link to their code, new paths animate, sequence diagrams
+  play their messages step by step, and state machines can be clicked through.
 - **Sections in review order:** changes grouped as Added / Modified / Deleted, each
   tagged High / Medium / Low impact, plus a data flow diagram for that section.
 - **Diffs:** syntax-highlighted, with file-level and line-level notes. Each test file

@@ -2,6 +2,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!-- jsDelivr's builds of React Flow and react-dom import React by three different URLs; this makes them share one copy. -->
+<script type="importmap">{"imports": {
+  "https://cdn.jsdelivr.net/npm/react@%5E19.3.0/": "https://cdn.jsdelivr.net/npm/react@19.3.0/",
+  "https://cdn.jsdelivr.net/npm/react@19.1.0/": "https://cdn.jsdelivr.net/npm/react@19.3.0/"
+}}</script>
+<style>/*__XYFLOW_CSS__*/</style>
 <style>
 /* Layout: sticky review checklist on the left, grouped file diffs on the right; one column on phones. */
 :root {
@@ -191,6 +197,79 @@ section.overview h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter
 .ov-diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-x: auto; }
 pre.mermaid { margin-block: 8px; padding: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; text-align: center; font-family: var(--sans); }
 .ov-diagram pre.mermaid, .flow-body pre.mermaid { margin: 0; padding: 0; background: transparent; border: 0; }
+
+/* Diagram stage: every rendered diagram sits in a pannable, zoomable view with its own toolbar. */
+.dia { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 6px; margin-block: 8px; outline: none; }
+.ov-diagram .dia, .flow-body .dia { margin: 0; }
+.dia:focus-visible .dia-view { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dia-view { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: grab; touch-action: pan-y; min-height: 120px; }
+.dia-view.grabbing { cursor: grabbing; }
+.dia-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.dia-canvas svg { display: block; max-width: none; }
+.dia-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: flex-end; }
+.dia-btn { font: 500 12px/1 var(--mono); min-width: 28px; height: 26px; padding: 0 7px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+.dia-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dia-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.dia-steps { display: inline-flex; gap: 4px; align-items: center; margin-right: 6px; }
+.dia-count { font: 12px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; font-variant-numeric: tabular-nums; }
+.dia-hint { margin: 0; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.dia-legend { display: inline-flex; gap: 8px; align-items: center; }
+/* One palette per status, shared by legend chips, graph cards, badges and edges. */
+.dia .added { --st-fg: var(--add-fg); --st-bg: var(--add-bg); }
+.dia .changed { --st-fg: var(--imp-med); --st-bg: var(--imp-med-bg); }
+.dia .removed { --st-fg: var(--del-fg); --st-bg: var(--del-bg); --st-dash: 4 3; --st-border: dashed; }
+.dia-chip { font: 600 10px/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 3px 6px; border-radius: 4px; border: 1px var(--st-border, solid); color: var(--st-fg); background: var(--st-bg); }
+.dia.full { position: fixed; inset: 0; z-index: 50; margin: 0; padding: 16px; background: var(--bg); }
+.dia.full .dia-view { flex: 1; height: auto !important; touch-action: none; }
+body.dia-lock { overflow: hidden; }
+
+/* Flowcharts: hovering a node dims everything it isn't connected to. */
+.dia svg .node, .dia svg .flowchart-link { transition: opacity .15s; }
+.dia svg.dia-focus .node:not(.dia-on):not(.dia-near), .dia svg.dia-focus .flowchart-link:not(.dia-on) { opacity: .2; }
+.dia svg .flowchart-link.dia-on { stroke: var(--accent) !important; stroke-width: 2px !important; }
+.dia svg .node.dia-on :is(rect, polygon, circle, path) { stroke-width: 2px !important; }
+.dia svg .node.dia-link { cursor: pointer; }
+.dia svg .node.dia-link :is(rect, polygon, circle, path) { stroke: var(--accent) !important; }
+.dia svg .node.dia-link .nodeLabel { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Sequence diagrams: stepping dims later messages and animates the current one. */
+.dia svg [data-et="message"], .dia svg .messageText { cursor: pointer; transition: opacity .2s; }
+.dia svg.seq-stepping [data-et="message"], .dia svg.seq-stepping .messageText { opacity: .12; }
+.dia svg.seq-stepping :is(.seq-past, .seq-now) { opacity: 1; }
+.dia svg :is(line, path).seq-now { stroke: var(--accent) !important; stroke-width: 2.5px !important; stroke-dasharray: 8 5 !important; animation: seq-dash .6s linear infinite; }
+.dia svg text.seq-now { fill: var(--accent) !important; font-weight: 600; }
+@keyframes seq-dash { to { stroke-dashoffset: -13; } }
+
+
+.dia-view.rf { cursor: default; touch-action: auto; }
+.dia .react-flow.dark { --xy-background-color: transparent; --xy-edge-stroke: var(--muted); --xy-edge-label-background-color: var(--panel); --xy-edge-label-color: var(--fg); --xy-minimap-background-color: var(--panel); --xy-attribution-background-color: transparent; font-family: var(--sans); }
+.dia .react-flow__attribution a { color: var(--muted); }
+.rf-card { min-width: 100%; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent-soft); color: var(--fg); font-size: 13px; line-height: 1.3; text-align: center; position: relative; }
+.rf-card:is(.added, .changed, .removed) { border: 1px var(--st-border, solid) var(--st-fg); background: var(--st-bg); }
+.rf-card.linked { cursor: pointer; }
+.rf-card.linked .rf-label { text-decoration: underline dotted; text-underline-offset: 3px; }
+.rf-label { font-weight: 500; overflow-wrap: anywhere; }
+.rf-detail { margin-top: 2px; font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.rf-badge { position: absolute; top: -8px; right: 6px; font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 2px 4px; border-radius: 3px; background: var(--bg); border: 1px solid currentColor; color: var(--st-fg); }
+.rf-card.final { border-width: 3px; border-style: double; }
+.dia .react-flow__node.current .rf-card { box-shadow: 0 0 0 2px var(--accent), 0 0 18px var(--accent-soft); }
+.dia .react-flow__edge.next .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
+.rf-badge.start { left: 6px; right: auto; color: var(--accent); }
+.rf-loops { margin-top: 3px; font: 11px var(--mono); color: var(--muted); }
+.rf-code { position: absolute; bottom: -9px; right: 6px; font: 600 10px/1 var(--mono); padding: 2px 5px; border-radius: 3px; border: 1px solid var(--accent); background: var(--bg); color: var(--accent); cursor: pointer; }
+.rf-frame { display: flex; flex-direction: column; height: 100%; }
+.rf-canvas { flex: 1; min-height: 0; }
+.rf-sim { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--muted); }
+.rf-sim b { color: var(--fg); font-weight: 600; }
+.rf-sim .dia-btn { height: 24px; }
+.rf-sim .event { color: var(--accent); border-color: var(--accent); }
+.rf-cluster { width: 100%; height: 100%; border: 1px dashed var(--line); border-radius: 8px; background: color-mix(in srgb, var(--soft) 55%, transparent); padding: 6px 10px; font: 600 11px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.dia .react-flow__handle { opacity: 0; }
+.dia .react-flow__node { transition: opacity .15s; }
+.dia .react-flow__node.dim, .dia .react-flow__edge.dim { opacity: .2; }
+.dia .react-flow__edge.on .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
+.dia .react-flow__edge:is(.added, .changed, .removed) .react-flow__edge-path { stroke: var(--st-fg); }
+.dia .react-flow__edge.removed .react-flow__edge-path { stroke-dasharray: var(--st-dash); }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .ov-flows { display: flex; flex-direction: column; gap: 12px; }
 .ov-layout { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
@@ -207,7 +286,7 @@ pre.mermaid { margin-block: 8px; padding: 12px; background: var(--bg); border: 1
   nav.toc { position: static; max-height: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
   .bar { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .dia svg *, .dia .react-flow__edge-path { animation: none !important; } }
 </style>
 
 <div class="wrap">
@@ -243,6 +322,12 @@ const PR_URL = "__PR_URL__";
 const STORE_KEY = "__STORE_KEY__";
 const COLLAPSE_LINES = 400;
 const MERMAID_URL = "https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.esm.min.mjs";
+const XYFLOW_URLS = {
+  react: "https://cdn.jsdelivr.net/npm/react@19.3.0/+esm",
+  client: "https://cdn.jsdelivr.net/npm/react-dom@19.3.0/client/+esm",
+  flow: "https://cdn.jsdelivr.net/npm/@xyflow/react@12.12.0/+esm",
+  dagre: "https://cdn.jsdelivr.net/npm/@dagrejs/dagre@3.1.1/+esm",
+};
 
 function loadReviewed() { try { return new Set(JSON.parse(localStorage.getItem(STORE_KEY) || "[]")); } catch { return new Set(); } }
 function saveReviewed(set) { try { localStorage.setItem(STORE_KEY, JSON.stringify([...set])); } catch {} }
@@ -451,6 +536,7 @@ function renderMain() {
         <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)}">▾</button><span class="n">${i + 1}</span>${esc(g.title)} <span class="n">${g.files.length} files · <span class="plus">+${add}</span> <span class="minus">−${rem}</span></span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
         ${g.data_flow ? `<details class="flow" open><summary>Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}
+        ${g.state ? `<details class="flow" open><summary>State</summary><div class="flow-body">${g.state}</div></details>` : ""}
       </div>`;
     g.files.forEach((f) => s.appendChild(fileCard(f)));
     main.appendChild(s);
@@ -498,49 +584,492 @@ function bindToolbar() {
     const chev = event.target.closest(".sec-chev");
     if (chev) { const s = chev.closest("section.group"); setSectionCollapsed(s, !s.classList.contains("collapsed")); }
   });
-  // Jumping to a collapsed section or file from the sidebar opens it.
   document.getElementById("toc").addEventListener("click", (event) => {
     const chev = event.target.closest("button.toc-chev");
     if (chev) { const g = chev.closest(".toc-group"); setTocCollapsed(g, !g.classList.contains("collapsed")); return; }
     const link = event.target.closest("a[href^='#']");
-    const target = link && document.getElementById(link.getAttribute("href").slice(1));
-    if (!target) return;
-    const section = target.closest("section.group");
-    if (section) setSectionCollapsed(section, false);
-    if (target.classList.contains("file")) setCollapsed(target, false);
+    if (link) revealTarget(link.getAttribute("href").slice(1));
   });
+}
+
+// Jumping to a collapsed section or file opens it.
+function revealTarget(id) {
+  const target = document.getElementById(id);
+  if (!target) return null;
+  const section = target.closest("section.group");
+  if (section) setSectionCollapsed(section, false);
+  if (target.classList.contains("file")) setCollapsed(target, false);
+  return target;
+}
+
+// A diagram link names a section id, "overview" or a file path.
+function jumpTo(target) {
+  document.querySelector(".dia.full")?.dispatchEvent(new CustomEvent("dia:close"));
+  revealTarget(document.getElementById(target) ? target : fileId(target))?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const cssVars = new Map();
+function cssVar(name) {
+  if (!cssVars.has(name)) cssVars.set(name, getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+  return cssVars.get(name);
 }
 
 function mermaidTheme() {
-  const css = getComputedStyle(document.documentElement);
-  const v = (name) => css.getPropertyValue(name).trim();
   return {
     darkMode: true,
-    background: v("--panel"), fontFamily: v("--sans"), fontSize: "13px",
-    primaryColor: v("--accent-soft"), primaryBorderColor: v("--accent"), primaryTextColor: v("--fg"),
-    secondaryColor: v("--soft"), tertiaryColor: v("--panel"),
-    lineColor: v("--muted"), textColor: v("--fg"),
-    clusterBkg: v("--soft"), clusterBorder: v("--line"), edgeLabelBackground: v("--panel"),
+    background: cssVar("--panel"), fontFamily: cssVar("--sans"), fontSize: "13px",
+    primaryColor: cssVar("--accent-soft"), primaryBorderColor: cssVar("--accent"), primaryTextColor: cssVar("--fg"),
+    secondaryColor: cssVar("--soft"), tertiaryColor: cssVar("--panel"),
+    lineColor: cssVar("--muted"), textColor: cssVar("--fg"),
+    clusterBkg: cssVar("--soft"), clusterBorder: cssVar("--line"), edgeLabelBackground: cssVar("--panel"),
   };
 }
 
-// Mermaid measures text while laying out, so a diagram inside a collapsed section or file
-// is rendered only once it scrolls into view.
+// [foreground, background] per status; the CSS mirrors these as --st-fg and --st-bg.
+const STATUS_VARS = { added: ["--add-fg", "--add-bg"], changed: ["--imp-med", "--imp-med-bg"], removed: ["--del-fg", "--del-bg"] };
+const STATUSES = Object.keys(STATUS_VARS);
+
+// Flowcharts and state diagrams can tag nodes with :::added, :::changed or :::removed.
+function withStatusClasses(source) {
+  if (!/^\s*(flowchart|graph|stateDiagram)/.test(source)) return source;
+  const classDef = (s) => {
+    const [fg, bg] = STATUS_VARS[s].map(cssVar);
+    return `  classDef ${s} fill:${bg},stroke:${fg},color:${cssVar("--fg")}${s === "removed" ? ",stroke-dasharray:4 3" : ""}`;
+  };
+  const missing = STATUSES.filter((s) => !new RegExp(`classDef\\s+${s}\\b`).test(source));
+  return [source, ...missing.map(classDef)].join("\n");
+}
+
+function statusLegend(present) {
+  const shown = STATUSES.filter(present);
+  return shown.length ? `<span class="dia-legend">${shown.map((s) => `<span class="dia-chip ${s}">${s}</span>`).join("")}</span>` : "";
+}
+
+const stageButton = (act, label, title) => `<button class="dia-btn" type="button" data-act="${act}" title="${title}" aria-label="${title}">${label}</button>`;
+
+function createStage({ steps = false, hints = [] }) {
+  const stage = document.createElement("div");
+  stage.className = "dia";
+  stage.tabIndex = 0;
+  stage.setAttribute("role", "group");
+  stage.setAttribute("aria-label", "Diagram. Drag to pan, Ctrl or Command plus scroll to zoom, F for full screen.");
+  const stepTools = steps ? `<span class="dia-steps">${stageButton("all", "⏮", "Show all messages (A)")}${stageButton("prev", "◀", "Previous message (P)")}${stageButton("play", "▶", "Play the messages in order")}${stageButton("next", "▶|", "Next message (N)")}<span class="dia-count"></span></span>` : "";
+  stage.innerHTML = `<div class="dia-tools">${stepTools}${stageButton("out", "−", "Zoom out (−)")}${stageButton("in", "+", "Zoom in (+)")}${stageButton("fit", "Fit", "Fit to view (0)")}${stageButton("full", "⤢", "Full screen (F)")}</div>
+    <div class="dia-view"><div class="dia-canvas"></div></div>
+    <p class="dia-hint"><span>${["Drag to pan", "pinch or Ctrl/⌘ + scroll to zoom", ...hints].join(" · ")}</span></p>`;
+  return stage;
+}
+
+const STAGE_KEYS = { "+": "in", "=": "in", "-": "out", "0": "fit", f: "full", n: "next", p: "prev", a: "all" };
+const ARROWS = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
+
+// Wires the stage's buttons and keys to a view: zoomBy, fit and panBy, plus optional step actions.
+function bindStage(stage, view) {
+  const fullBtn = stage.querySelector('[data-act="full"]');
+  const setFull = (full) => {
+    stage.classList.toggle("full", full);
+    document.body.classList.toggle("dia-lock", full);
+    fullBtn.setAttribute("aria-pressed", String(full));
+    view.onMode?.(full);
+    // Two frames: the first lays out the new size, and resize observers deliver it before the second.
+    requestAnimationFrame(() => requestAnimationFrame(() => view.fit()));
+    if (full) stage.focus({ preventScroll: true });
+  };
+  const actions = { in: () => view.zoomBy(1.25), out: () => view.zoomBy(0.8), fit: () => view.fit(), full: () => setFull(!stage.classList.contains("full")), ...view.steps };
+  stage.querySelector(".dia-tools").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-act]");
+    if (btn) actions[btn.dataset.act]();
+  });
+  stage.addEventListener("dia:close", () => setFull(false));
+  stage.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && stage.classList.contains("full")) { setFull(false); return; }
+    if (event.target !== stage || event.metaKey || event.ctrlKey || event.altKey) return;
+    const act = actions[STAGE_KEYS[event.key]];
+    if (act) { event.preventDefault(); act(); }
+    else if (ARROWS[event.key]) { event.preventDefault(); view.panBy(...ARROWS[event.key]); }
+  });
+}
+
+const MIN_INLINE_SCALE = 0.55;
+
+// Pan and zoom by CSS transform. Plain vertical scrolling still scrolls the page unless the stage is full screen.
+function svgPanZoom(stage, svg) {
+  const view = stage.querySelector(".dia-view"), canvas = stage.querySelector(".dia-canvas");
+  const box = svg.viewBox.baseVal;
+  const size = { w: box?.width || svg.getBoundingClientRect().width, h: box?.height || svg.getBoundingClientRect().height };
+  svg.removeAttribute("style");
+  svg.setAttribute("width", size.w); svg.setAttribute("height", size.h);
+  canvas.appendChild(svg);
+  const t = { x: 0, y: 0, k: 1 };
+  let touched = false, fitted = [0, 0];
+  const apply = () => { canvas.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`; };
+  const zoomAt = (factor, cx, cy) => {
+    const k = Math.min(4, Math.max(0.15, t.k * factor));
+    t.x = cx - (cx - t.x) * (k / t.k); t.y = cy - (cy - t.y) * (k / t.k); t.k = k;
+    touched = true; apply();
+  };
+  const panBy = (dx, dy) => { t.x += dx; t.y += dy; touched = true; apply(); };
+  const local = (event) => { const r = view.getBoundingClientRect(); return [event.clientX - r.left, event.clientY - r.top]; };
+  function fit() {
+    const full = stage.classList.contains("full"), w = view.clientWidth;
+    if (full) {
+      const k = Math.min(2, w / size.w, view.clientHeight / size.h);
+      Object.assign(t, { k, x: (w - size.w * k) / 2, y: (view.clientHeight - size.h * k) / 2 });
+    } else {
+      const k = Math.max(Math.min(1, w / size.w), MIN_INLINE_SCALE);
+      view.style.height = `${Math.round(Math.min(size.h * k, innerHeight * 0.7))}px`;
+      Object.assign(t, { k, x: Math.max(0, (w - size.w * k) / 2), y: 0 });
+    }
+    touched = false; apply();
+    fitted = [view.clientWidth, view.clientHeight];
+  }
+
+  const pointers = new Map();
+  let drag = null, moved = false, pinch = 0;
+  const spread = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  view.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    moved = false;
+    drag = { x: event.clientX, y: event.clientY, tx: t.x, ty: t.y };
+    if (pointers.size === 2) pinch = spread();
+  });
+  view.addEventListener("pointermove", (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size === 2) {
+      const d = spread(), [a, b] = [...pointers.values()], r = view.getBoundingClientRect();
+      zoomAt(d / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      pinch = d; moved = true; return;
+    }
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!moved && Math.hypot(dx, dy) < 4) return;
+    if (!moved) { moved = true; view.setPointerCapture(event.pointerId); view.classList.add("grabbing"); }
+    t.x = drag.tx + dx; t.y = drag.ty + dy; touched = true; apply();
+  });
+  const release = (event) => {
+    pointers.delete(event.pointerId);
+    if (!pointers.size) view.classList.remove("grabbing");
+  };
+  view.addEventListener("pointerup", release);
+  view.addEventListener("pointercancel", release);
+  // A drag must not also click the node it started on.
+  view.addEventListener("click", (event) => { if (moved) { event.stopPropagation(); event.preventDefault(); moved = false; } }, true);
+  view.addEventListener("wheel", (event) => {
+    const full = stage.classList.contains("full");
+    // A mouse wheel notch is about 100 and a trackpad pinch event about 2-10, so clamp to keep notches gentle.
+    if (event.ctrlKey || event.metaKey) { event.preventDefault(); zoomAt(Math.exp(-Math.max(-40, Math.min(40, event.deltaY)) * 0.01), ...local(event)); }
+    else if (full) { event.preventDefault(); panBy(-event.deltaX, -event.deltaY); }
+    else if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) { event.preventDefault(); panBy(-event.deltaX, 0); }
+  }, { passive: false });
+  view.addEventListener("dblclick", (event) => zoomAt(event.shiftKey ? 0.6 : 1.6, ...local(event)));
+  new ResizeObserver(() => {
+    if (!touched && (view.clientWidth !== fitted[0] || view.clientHeight !== fitted[1])) fit();
+  }).observe(view);
+  fit();
+  return { zoomBy: (f) => zoomAt(f, view.clientWidth / 2, view.clientHeight / 2), fit, panBy };
+}
+
+function flowchartNodeId(el, svgId) {
+  const prefix = `${svgId}-flowchart-`;
+  return el.id.startsWith(prefix) ? el.id.slice(prefix.length).replace(/-\d+$/, "") : null;
+}
+
+// Hovering or focusing a node highlights it, its neighbours and its edges. Linked nodes jump to their code.
+function enhanceFlowchart(svg, edges, links) {
+  const nodes = new Map();
+  for (const el of svg.querySelectorAll("g.node")) { const id = flowchartNodeId(el, svg.id); if (id) nodes.set(id, el); }
+  const paths = new Map([...svg.querySelectorAll("path[data-edge]")].map((p) => [p.dataset.id, p]));
+  const focus = (id) => {
+    svg.classList.add("dia-focus");
+    nodes.get(id)?.classList.add("dia-on");
+    for (const e of edges) {
+      if (e.from !== id && e.to !== id) continue;
+      paths.get(e.id)?.classList.add("dia-on");
+      nodes.get(e.from === id ? e.to : e.from)?.classList.add("dia-near");
+    }
+  };
+  const blur = () => {
+    svg.classList.remove("dia-focus");
+    svg.querySelectorAll(".dia-on, .dia-near").forEach((el) => el.classList.remove("dia-on", "dia-near"));
+  };
+  for (const [id, el] of nodes) {
+    el.addEventListener("pointerenter", () => focus(id));
+    el.addEventListener("pointerleave", blur);
+    const target = links[id];
+    if (!target) continue;
+    el.classList.add("dia-link");
+    el.setAttribute("tabindex", "0"); el.setAttribute("role", "link");
+    el.setAttribute("aria-label", `${el.textContent.trim()}: jump to its code`);
+    el.addEventListener("click", () => jumpTo(target));
+    el.addEventListener("keydown", (event) => { if (event.key === "Enter") jumpTo(target); });
+    el.addEventListener("focus", () => focus(id));
+    el.addEventListener("blur", blur);
+  }
+}
+
+const STEP_MS = 1100;
+
+function sequenceSteps(stage, svg) {
+  const lines = [...svg.querySelectorAll('[data-et="message"]')].sort((a, b) => +a.dataset.id.slice(1) - +b.dataset.id.slice(1));
+  const steps = lines.map((line) => {
+    const label = line.previousElementSibling;
+    return label?.classList.contains("messageText") ? [label, line] : [line];
+  });
+  const count = stage.querySelector(".dia-count"), play = stage.querySelector('[data-act="play"]');
+  let at = -1, timer = null;
+  const show = (i) => {
+    at = Math.max(-1, Math.min(steps.length - 1, i));
+    svg.classList.toggle("seq-stepping", at >= 0);
+    steps.forEach((els, j) => els.forEach((el) => { el.classList.toggle("seq-past", j < at); el.classList.toggle("seq-now", j === at); }));
+    count.textContent = at < 0 ? `${steps.length} messages` : `${at + 1} / ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; play.textContent = "▶"; play.setAttribute("aria-pressed", "false"); };
+  const toggle = () => {
+    if (timer) { stop(); return; }
+    show(at >= steps.length - 1 ? 0 : at + 1);
+    play.textContent = "⏸"; play.setAttribute("aria-pressed", "true");
+    timer = setInterval(() => (at >= steps.length - 1 ? stop() : show(at + 1)), STEP_MS);
+  };
+  const go = (i) => { stop(); show(i); };
+  steps.forEach((els, j) => els.forEach((el) => el.addEventListener("click", () => go(j))));
+  show(-1);
+  return { all: () => go(-1), prev: () => go(at - 1), next: () => go(at + 1), play: toggle };
+}
+
+async function flowchartEdges(mermaid, source) {
+  const diagram = await mermaid.mermaidAPI.getDiagramFromText(source);
+  return diagram.db.getEdges().map((e) => ({ id: e.id, from: e.start, to: e.end }));
+}
+
+async function renderMermaid(mermaid, pre) {
+  const source = pre.textContent;
+  const links = JSON.parse(pre.dataset.links || "{}");
+  await mermaid.run({ nodes: [pre] });
+  const svg = pre.querySelector("svg");
+  const kind = svg?.getAttribute("aria-roledescription");
+  if (!svg || kind === "error") return;
+  const isSequence = kind === "sequence", isFlowchart = kind?.startsWith("flowchart");
+  const hints = [
+    isSequence && "▶ plays the messages in order; click one to jump to it",
+    isFlowchart && "hover a node to trace it",
+    Object.keys(links).length && "click an underlined node to open its code",
+    statusLegend((s) => svg.querySelector(`.node.${s}, g.${s}`)),
+  ].filter(Boolean);
+  const stage = createStage({ steps: isSequence, hints });
+  pre.replaceWith(stage);
+  const view = svgPanZoom(stage, svg);
+  if (isSequence) view.steps = sequenceSteps(stage, svg);
+  if (isFlowchart) enhanceFlowchart(svg, await flowchartEdges(mermaid, source), links);
+  bindStage(stage, view);
+}
+
+let xyflow;
+function loadXyflow() {
+  xyflow ??= Promise.all(Object.values(XYFLOW_URLS).map((url) => import(url))).then(([React, client, flow, dagre]) =>
+    ({ React, createRoot: client.createRoot, flow, dagre: dagre.default ?? dagre }));
+  return xyflow;
+}
+
+const GROUP_LABEL_H = 24;
+
+function estimatedSize(n) {
+  const chars = Math.max(n.label.length, (n.detail || "").length * 0.9);
+  return { width: Math.round(Math.min(260, Math.max(120, chars * 7.4 + 32))), height: n.detail ? 54 : 38 };
+}
+
+// Lays the graph out with dagre and returns React Flow nodes and edges. Groups become parent nodes.
+// `sizes` holds the cards' rendered sizes once React Flow has measured them.
+function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
+  const g = new dagre.graphlib.Graph({ compound: true, multigraph: true });
+  g.setGraph({ rankdir: graph.direction || "TB", nodesep: 28, ranksep: 60, marginx: 8, marginy: 8 });
+  g.setDefaultEdgeLabel(() => ({}));
+  const groupIds = new Map([...new Set(graph.nodes.map((n) => n.group).filter(Boolean))].map((label, i) => [label, `group-${i}`]));
+  groupIds.forEach((id, label) => g.setNode(id, { label }));
+  for (const n of graph.nodes) {
+    g.setNode(n.id, sizes.get(n.id) ?? estimatedSize(n));
+    if (n.group) g.setParent(n.id, groupIds.get(n.group));
+  }
+  const links = graph.edges.map((e, i) => ({ ...e, id: `e${i}` }));
+  const drawn = links.filter((e) => e.from !== e.to);
+  drawn.forEach((e) => g.setEdge({ v: e.from, w: e.to, name: e.id }, e.label ? { label: e.label, width: e.label.length * 6.5, height: 18 } : {}));
+  dagre.layout(g);
+  const topLeft = (id) => { const p = g.node(id); return { x: p.x - p.width / 2, y: p.y - p.height / 2 }; };
+  const clusters = new Map([...groupIds].map(([label, id]) => {
+    const c = g.node(id), p = topLeft(id);
+    return [label, { id, type: "cluster", data: { label }, position: { x: p.x, y: p.y - GROUP_LABEL_H }, style: { width: c.width, height: c.height + GROUP_LABEL_H }, selectable: false, zIndex: -1 }];
+  }));
+  const horizontal = graph.direction === "LR" || graph.direction === "RL";
+  const reversed = graph.direction === "BT" || graph.direction === "RL";
+  const [source, target] = horizontal ? ["right", "left"] : ["bottom", "top"];
+  const side = horizontal ? "bottom" : "right";
+  const nodes = graph.nodes.map((n) => {
+    const abs = topLeft(n.id), parent = clusters.get(n.group);
+    return {
+      id: n.id, type: "card", style: { width: g.node(n.id).width },
+      position: parent ? { x: abs.x - parent.position.x, y: abs.y - parent.position.y } : abs,
+      ...(parent ? { parentId: parent.id } : {}),
+      sourcePosition: reversed ? target : source, targetPosition: reversed ? source : target,
+      data: { ...n, side, machine: Boolean(graph.machine), loops: links.filter((e) => e.from === n.id && e.to === n.id).map((e) => e.label || "itself") },
+    };
+  });
+  // The second of two opposite edges loops round the side handles, so the pair don't overlap.
+  const isReturn = (e) => drawn.some((o) => o.from === e.to && o.to === e.from && o.id < e.id);
+  const edges = drawn.map((e) => ({
+    id: e.id, source: e.from, target: e.to, ...(isReturn(e) ? { sourceHandle: "side-out", targetHandle: "side-in" } : {}), label: e.label, type: "smoothstep",
+    className: e.status || "", animated: e.animated ?? (e.status === "added" || e.status === "changed"),
+    markerEnd: { type: flow.MarkerType.ArrowClosed, color: cssVar(STATUS_VARS[e.status]?.[0] ?? "--muted") },
+  }));
+  const box = g.graph();
+  return { nodes: [...clusters.values(), ...nodes], edges, width: box.width, height: box.height + (groupIds.size ? GROUP_LABEL_H : 0) };
+}
+
+function graphNodeTypes({ React, flow }) {
+  const h = React.createElement;
+  // In a machine a click moves to the state, so its code link gets its own button.
+  const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", title: "Open its code", onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
+  const card = ({ data, sourcePosition, targetPosition }) => h("div", {
+    className: ["rf-card", data.status, data.final && "final", data.link && !data.machine && "linked"].filter(Boolean).join(" "),
+    title: data.link && !data.machine ? "Open its code" : undefined,
+  },
+    h(flow.Handle, { type: "target", position: targetPosition, isConnectable: false }),
+    h("div", { className: "rf-label" }, data.label),
+    data.detail ? h("div", { className: "rf-detail" }, data.detail) : null,
+    data.loops.length ? h("div", { className: "rf-loops" }, `↻ ${data.loops.join(", ")}`) : null,
+    data.initial ? h("span", { className: "rf-badge start" }, "start") : null,
+    data.status ? h("span", { className: `rf-badge ${data.status}` }, data.status) : null,
+    data.link && data.machine ? codeButton(data.link) : null,
+    h(flow.Handle, { type: "source", position: sourcePosition, isConnectable: false }),
+    h(flow.Handle, { type: "target", id: "side-in", position: data.side, isConnectable: false, style: { left: data.side === "bottom" ? "30%" : undefined, top: data.side === "right" ? "30%" : undefined } }),
+    h(flow.Handle, { type: "source", id: "side-out", position: data.side, isConnectable: false, style: { left: data.side === "bottom" ? "70%" : undefined, top: data.side === "right" ? "70%" : undefined } }));
+  const cluster = ({ data }) => h("div", { className: "rf-cluster" }, data.label);
+  return { card, cluster };
+}
+
+function neighbours(edges, id) {
+  const near = new Set([id]);
+  for (const e of edges) if (e.source === id || e.target === id) { near.add(e.source); near.add(e.target); }
+  return near;
+}
+
+function withHoverClasses({ nodes, edges }, hover) {
+  if (!hover) return { nodes, edges };
+  const near = neighbours(edges, hover);
+  const dim = (n) => n.type !== "cluster" && !near.has(n.id);
+  return {
+    nodes: nodes.map((n) => (dim(n) ? { ...n, className: `${n.className || ""} dim` } : n)),
+    edges: edges.map((e) => ({ ...e, className: `${e.className} ${e.source === hover || e.target === hover ? "on" : "dim"}` })),
+  };
+}
+
+// The current state glows and the transitions out of it animate.
+function withMachineClasses(nodes, edges, current) {
+  if (!current) return { nodes, edges };
+  return {
+    nodes: nodes.map((n) => (n.id === current ? { ...n, className: "current" } : n)),
+    edges: edges.map((e) => (e.source === current ? { ...e, className: `${e.className} next`, animated: true } : e)),
+  };
+}
+
+function MachinePanel({ lib, graph, current, setCurrent }) {
+  const h = lib.React.createElement;
+  const label = (id) => graph.nodes.find((n) => n.id === id)?.label ?? id;
+  const events = graph.edges.filter((e) => e.from === current);
+  return h("div", { className: "rf-sim" },
+    h("span", null, "State ", h("b", null, label(current))),
+    events.length ? h("span", null, "· events") : h("span", null, "· no events out"),
+    ...events.map((e, i) => h("button", { key: i, type: "button", className: "dia-btn event", title: `Go to ${label(e.to)}`, onClick: () => setCurrent(e.to) }, e.label)),
+    current !== graph.machine.initial ? h("button", { type: "button", className: "dia-btn", onClick: () => setCurrent(graph.machine.initial) }, "Reset") : null);
+}
+
+// Lays out once from estimated sizes, then again from the sizes React Flow measures, hidden until then.
+// Scrolling over an inline graph scrolls the page; full screen hands the wheel to React Flow.
+function GraphView({ lib, graph, initial, stage }) {
+  const { React, flow } = lib, h = React.createElement;
+  const nodeTypes = React.useMemo(() => graphNodeTypes(lib), []);
+  const [nodes, setNodes, onNodesChange] = flow.useNodesState(initial.nodes);
+  const [hover, setHover] = React.useState(null);
+  const [full, setFull] = React.useState(false);
+  const [measured, setMeasured] = React.useState(false);
+  const [current, setCurrent] = React.useState(graph.machine?.initial ?? null);
+  const rf = flow.useReactFlow();
+  const initialized = flow.useNodesInitialized();
+  React.useEffect(() => bindStage(stage, {
+    zoomBy: (f) => rf.zoomTo(rf.getZoom() * f, { duration: 150 }),
+    fit: () => rf.fitView({ padding: 0.08, duration: 200 }),
+    panBy: (dx, dy) => { const v = rf.getViewport(); rf.setViewport({ ...v, x: v.x + dx, y: v.y + dy }); },
+    onMode: setFull,
+  }), []);
+  React.useEffect(() => {
+    if (!initialized || measured) return;
+    const sizes = new Map(rf.getNodes().filter((n) => n.type === "card" && n.measured).map((n) => [n.id, n.measured]));
+    const next = layoutGraph(lib, graph, sizes);
+    setNodes(next.nodes);
+    sizeView(stage.querySelector(".dia-view"), next, graph);
+    setMeasured(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => rf.fitView({ padding: 0.08 })));
+  }, [initialized]);
+  const shown = React.useMemo(() => withHoverClasses(withMachineClasses(nodes, initial.edges, current), hover), [nodes, hover, current]);
+  return h("div", { className: "rf-frame" }, h("div", { className: "rf-canvas" }, h(flow.ReactFlow, {
+    nodes: shown.nodes, edges: shown.edges, onNodesChange, nodeTypes, colorMode: "dark", style: { opacity: measured ? 1 : 0 },
+    fitView: true, fitViewOptions: { padding: 0.08 }, minZoom: 0.2, maxZoom: 2.5,
+    nodesConnectable: false, elementsSelectable: false, zoomOnScroll: full, preventScrolling: full,
+    onNodeMouseEnter: (_, n) => { if (n.type !== "cluster") setHover(n.id); }, onNodeMouseLeave: () => setHover(null),
+    onNodeClick: (_, n) => {
+      if (graph.machine) { if (n.type === "card") setCurrent(n.id); }
+      else if (n.data.link) jumpTo(n.data.link);
+    },
+  }, h(flow.Background, { gap: 18, size: 1, color: cssVar("--line") }),
+    initial.nodes.length > 8 ? h(flow.MiniMap, { pannable: true, zoomable: true, nodeColor: cssVar("--accent-soft"), maskColor: "rgba(0, 0, 0, .45)" }) : null)),
+    graph.machine ? h(MachinePanel, { lib, graph, current, setCurrent }) : null);
+}
+
+const SIM_PANEL_H = 40;
+
+// Inline height: the layout scaled to the view's width, plus the machine's event panel.
+function sizeView(view, layout, graph) {
+  const scale = Math.min(1, view.clientWidth / layout.width);
+  const extra = graph.machine ? SIM_PANEL_H : 0;
+  view.style.height = `${Math.round(Math.min(Math.max(layout.height * scale + 48, 200), innerHeight * 0.7) + extra)}px`;
+}
+
+async function renderGraph(host) {
+  const graph = JSON.parse(host.dataset.graph);
+  const lib = await loadXyflow();
+  const initial = layoutGraph(lib, graph);
+  const hints = [graph.machine ? "click a state or an event to move through the machine" : "drag nodes to rearrange", "hover a node to trace it",
+    graph.nodes.some((n) => n.link) && (graph.machine ? "code ↗ opens a state's code" : "click an underlined node to open its code"),
+    statusLegend((s) => graph.nodes.some((n) => n.status === s) || graph.edges.some((e) => e.status === s))].filter(Boolean);
+  const stage = createStage({ hints });
+  host.replaceWith(stage);
+  const view = stage.querySelector(".dia-view");
+  view.classList.add("rf");
+  sizeView(view, initial, graph);
+  const { React, flow } = lib;
+  lib.createRoot(view).render(React.createElement(flow.ReactFlowProvider, null, React.createElement(GraphView, { lib, graph, initial, stage })));
+}
+
+// Mermaid and React Flow both measure text while laying out, so a diagram inside a collapsed
+// section or file is rendered only once it scrolls into view.
+// Both libraries start downloading at once, and neither kind of diagram waits for the other.
 async function renderDiagrams() {
-  const nodes = document.querySelectorAll("pre.mermaid");
-  if (!nodes.length) return;
-  const { default: mermaid } = await import(MERMAID_URL);
-  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: mermaidTheme() });
+  const diagrams = [...document.querySelectorAll("pre.mermaid, .rf-graph")];
+  const charts = diagrams.filter((el) => el.matches("pre.mermaid"));
+  charts.forEach((pre) => { pre.textContent = withStatusClasses(pre.textContent); });
+  const mermaid = charts.length ? import(MERMAID_URL).then(({ default: m }) => {
+    m.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: mermaidTheme() });
+    return m;
+  }) : null;
+  if (charts.length < diagrams.length) loadXyflow();
+  const render = (el) => (el.matches(".rf-graph") ? renderGraph(el) : mermaid.then((m) => renderMermaid(m, el))).catch((err) => console.error("diagram", err));
   const observer = new IntersectionObserver((entries) => {
-    const visible = [];
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       observer.unobserve(entry.target);
-      visible.push(entry.target);
+      render(entry.target);
     }
-    if (visible.length) mermaid.run({ nodes: visible }).catch((err) => console.error("mermaid", err));
   });
-  nodes.forEach((el) => observer.observe(el));
+  diagrams.forEach((el) => observer.observe(el));
 }
 
 function trackToolbarHeight() {
@@ -550,5 +1079,5 @@ function trackToolbarHeight() {
   update();
 }
 
-renderMeta(); renderToc(); renderMain(); bindToolbar(); trackToolbarHeight(); refresh(); renderDiagrams().catch((err) => console.error("mermaid", err));
+renderMeta(); renderToc(); renderMain(); bindToolbar(); trackToolbarHeight(); refresh(); renderDiagrams().catch((err) => console.error("diagram", err));
 </script>
