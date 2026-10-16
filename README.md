@@ -87,9 +87,9 @@ artifact. A reviewer can go through it in order and miss nothing. The page has:
 - **Overview:** summary, before/after, a mermaid architecture diagram, a code-layout
   table and key decisions.
 - **Sections in review order:** changes grouped as Added / Modified / Deleted, each
-  tagged High / Medium / Low impact, and a table of the tests the section changed
-  (inputs, expected output, why).
-- **Diffs:** syntax-highlighted, with file-level and line-level notes.
+  tagged High / Medium / Low impact.
+- **Diffs:** syntax-highlighted, with file-level and line-level notes. Each test file
+  gets a table of the tests it changed (inputs, expected output, why).
 - **Checklist:** reviewed ticks saved in the browser. Reviewed files and finished
   sections collapse, in the page and the sidebar.
 

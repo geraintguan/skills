@@ -16,7 +16,7 @@ Config keys:
             changes: {added|modified|deleted: [{impact: "High"|"Medium"|"Low", text: HTML}]}}]
           (legacy: note: [HTML strings] renders a plain list when changes is absent)
             tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
-                     inputs: HTML, expected: HTML, why: HTML}]  one row per test changed in the section's files
+                     inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
   overview (optional, rendered first): {
@@ -30,6 +30,7 @@ Diagrams anywhere else go in HTML fields as <pre class="mermaid">source</pre>.
 The script fails if a changed file is in no group and not skipped.
 """
 import html, json, subprocess, sys, pathlib
+from collections import defaultdict
 
 cfg = json.loads(pathlib.Path(sys.argv[1]).read_text())
 out_path = pathlib.Path(sys.argv[2])
@@ -93,6 +94,7 @@ for g in cfg["groups"]:
     if g.get("tests_file"):
         tests += json.loads((pathlib.Path(sys.argv[1]).parent / g["tests_file"]).read_text())
     group_paths = {f["path"] for f in files}
+    rows_by_file = defaultdict(list)
     for row in tests:
         missing_keys = {"file", "name", "change", "type", "inputs", "expected", "why"} - row.keys()
         if missing_keys:
@@ -101,7 +103,10 @@ for g in cfg["groups"]:
             sys.exit(f"{g['id']}: bad change/type in test row {row['name']}")
         if row["file"] not in group_paths:
             sys.exit(f"{g['id']}: test file {row['file']} is not in this group's files")
-    g = {**g, "tests": tests}
+        rows_by_file[row["file"]].append(row)
+    for f in files:
+        f["test_rows"] = rows_by_file[f["path"]]
+    g = {k: v for k, v in g.items() if k not in ("tests", "tests_file")}
     for kind, items in g.get("changes", {}).items():
         if kind not in ("added", "modified", "deleted"):
             sys.exit(f"{g['id']}: unknown change type {kind}")

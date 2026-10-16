@@ -45,7 +45,7 @@ one in any HTML field as `<pre class="mermaid">flowchart LR\n  A --> B</pre>`. E
 | `lead` | One sentence saying where to start reading. |
 | `changes` | `{added, modified, deleted}`. Each holds a list of `{impact, text}`. Leave out a type with no entries. |
 | `files` | Paths, or `{path, note, lines}` objects, ordered source → tests → stories. |
-| `tests` | Test rows. See below. |
+| `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
 
@@ -106,7 +106,8 @@ table.
   and states, event names and properties, counts.
 - `why` ties the change to the PR. Say "rename only" when that's all it is. A removed
   row names the test that replaces it.
-- `file` must be one of the section's files.
+- `file` must be one of the section's files. The row shows in a Tests table on that
+  file's card, above its diff.
 
 ## Writing rules
 

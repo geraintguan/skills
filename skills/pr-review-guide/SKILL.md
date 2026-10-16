@@ -5,7 +5,7 @@ description: >-
   it as an artifact. The guide has a high-level overview (summary, before/after,
   architecture diagram, code layout, key decisions). Sections follow review order,
   each listing its changes as Added / Modified / Deleted with High / Medium / Low
-  impact tags, and each with a table of the tests it changed. Diffs are
+  impact tags. Each changed test file gets a table of the tests it changed. Diffs are
   syntax-highlighted, with file-level and line-level notes, a reviewed checklist, and
   collapsing for reviewed sections. Use it whenever the user asks for an artifact,
   page, guide or walkthrough to help them (or someone else) review a PR, branch,
@@ -30,9 +30,9 @@ From top to bottom:
    - a caret, plus counts per impact level
    - a one-line lead saying where to start
    - collapsible Added / Modified / Deleted lists, where every item has an impact tag
-   - a Tests table, collapsed by default: change, test name, Unit / Integration / E2E, inputs,
-     expected output, and why the test changed
    - its files' diffs, with an "About this file" note and inline line notes
+   - on each test file, above its diff, a Tests table, collapsed by default: change,
+     test name, Unit / Integration / E2E, inputs, expected output, and why the test changed
 4. **Sidebar and toolbar.** The sidebar lists every file, has collapsible sections, and
    shows progress. The toolbar has hide tests/stories, hide line notes, and expand or
    collapse all.
@@ -123,7 +123,8 @@ renders each diagram when it scrolls into view. Pick the diagram type that fits:
    - use the real test names
    - say when a change is a rename only
    - name the test that replaces each removed one
-4. Merge the rows into each section's `tests` array. You can also point a section at
+4. Merge the rows into each section's `tests` array. The page shows each row in its
+   `file`'s card. You can also point a section at
    them with `tests_file`.
 5. Spot-check a few rows against the code.
 6. Note any coverage gaps the rows show, such as an untested boundary. Tell the user.
