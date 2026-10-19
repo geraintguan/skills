@@ -56,6 +56,7 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
 | `state` | A list of flows `{title, machine, caption}` for the state this section adds or changes, shown in a State card under the data flow. See "State machines". |
 | `data_flow` | A list of flows `{title, sequence or graph or machine, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
+| `fixtures` | `{summary, files}`: test or eval data this section's tests use, listed without diffs. See "Fixtures". |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
 
 ### Data flow
@@ -265,6 +266,33 @@ adds a helper in hunk 1 and adopts it in hunks 2 and 3:
 - Each part has its own card, reviewed checkbox, `note` and `lines`, and shows "Part 1 of
   2". A link to the path goes to the first part.
 - Split only when it helps the story. A file whose changes are one idea stays whole.
+
+### Fixtures
+
+Test and eval data files hold no logic to review line by line, and many are binary. List
+them in the section whose tests or evals use them:
+
+```json
+"fixtures": {
+  "summary": "Sample contracts the clause-extraction eval runs on, one per edge case.",
+  "files": [
+    {"path": "evals/data/nda-redlined.docx", "note": "An NDA with tracked changes in clause 4."},
+    {"path": "tests/fixtures/scans/", "note": "Scanned PDFs with no text layer."}
+  ]
+}
+```
+
+- Use it for sample documents, images, audio, recorded responses, golden outputs,
+  eval datasets and other data the tests load. Test code and helpers stay in `files`.
+- `summary` is one or two HTML sentences: what the data is and which tests or evals use it.
+- `files` holds paths, or `{path, note}` objects. A path ending in `/` covers every
+  changed file under it, and they share its `note`. `note` says what the file holds and
+  why the tests need it.
+- The page shows a collapsed Fixtures card in the section head: each file's change,
+  its line counts or "binary", its size, and its note. There's no diff, line note or
+  reviewed box, and fixtures don't count toward the section's lines.
+- A fixture must be a changed file, in one section only, and not also in `files`. The
+  builder fails otherwise.
 
 ### Test rows
 

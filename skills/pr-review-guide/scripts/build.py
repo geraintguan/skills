@@ -26,6 +26,8 @@ Config keys:
             data_flow: [{title?, sequence: Sequence | graph: Graph | machine: Machine | schema: Schema, caption?: HTML}]
                        how data moves through this section's change, usually a sequence; [] opts out, a missing key warns
             state: [same flow shape, usually a machine]  the state this section adds or changes, shown in a State card
+            fixtures: {summary: HTML, files: [path | dir/ | {path, note?}]}  test or eval data (documents, binaries)
+                      listed with their size and a note, never diffed; a path ending in / covers every changed file under it
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
   overview (optional, rendered first): {
     summary: [HTML paragraphs: what the change does and why],
@@ -337,8 +339,69 @@ for g in cfg["groups"]:
         spec["part"] = len(entries_by_path[spec["path"]])
 check_split_files(entries_by_path)
 
+@functools.cache
+def changed_files() -> dict[str, dict[str, Any]]:
+    """Each changed path's status (A, D or M) and line counts, from one diff; git counts binary files as "-"."""
+    status, counts = {}, {}
+    for line in git("diff", "--raw", "--numstat", "--no-renames", base, head).splitlines():
+        if line.startswith(":"):
+            meta, path = line.split("\t", 1)
+            status[path] = meta.split()[-1][0]
+        else:
+            add, rem, path = line.split("\t", 2)
+            counts[path] = (add, rem)
+    return {path: dict(status=st if st in "ADM" else "M", binary=counts[path][0] == "-",
+                       add=int(counts[path][0]) if counts[path][0] != "-" else 0,
+                       rem=int(counts[path][1]) if counts[path][1] != "-" else 0)
+            for path, st in status.items()}
+
+def blob_sizes(specs: list[str]) -> list[Optional[int]]:
+    """Sizes of `ref:path` blobs in one git call; None for a blob that doesn't exist."""
+    out = subprocess.run(["git", "cat-file", "--batch-check=%(objectsize)"], cwd=root, input="\n".join(specs) + "\n",
+                         capture_output=True, text=True, check=True).stdout.splitlines()
+    return [int(line) if line.isdigit() else None for line in out]
+
+def fixture_paths(where: str, path: str) -> list[str]:
+    if path.endswith("/"):
+        matches = sorted(f for f in changed_files() if f.startswith(path))
+    else:
+        matches = [path] if path in changed_files() else []
+    if not matches:
+        sys.exit(f"{where}: fixture {path!r} matches no changed file")
+    return matches
+
+def fixture_rows(notes: dict[str, Optional[str]]) -> list[dict[str, Any]]:
+    """One row per fixture path, with its size at head, or at base for a deleted file."""
+    rows = [dict(path=path, note=note, **changed_files()[path]) for path, note in notes.items()]
+    sizes = blob_sizes([f"{base if r['status'] == 'D' else head}:{r['path']}" for r in rows])
+    return [{**row, "size": size} for row, size in zip(rows, sizes)]
+
+def check_fixtures(where: str, fixtures: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Expands fixture entries to the changed files they cover. Fixtures get a row each, but no diff."""
+    if not fixtures:
+        return None
+    entries = [{"path": e} if isinstance(e, str) else e for e in fixtures.get("files") or []]
+    if not entries or fixtures.keys() - {"summary", "files"}:
+        sys.exit(f"{where}: fixtures takes {{summary, files}} with at least one file")
+    if not fixtures.get("summary"):
+        print(f"warning: section {where} fixtures have no summary saying what the data is for", file=sys.stderr)
+    notes = {p: e.get("note") for e in entries for p in fixture_paths(where, e["path"])}
+    return {"summary": fixtures.get("summary"), "files": fixture_rows(notes)}
+
+fixture_owner: dict[str, str] = {}
+
+def claim_fixtures(group_id: str, fixtures: Optional[dict[str, Any]]) -> None:
+    for row in fixtures["files"] if fixtures else []:
+        path = row["path"]
+        if path in entries_by_path or path in fixture_owner:
+            other = fixture_owner.get(path) or "a section's files"
+            sys.exit(f"{path}: listed as a fixture in {group_id} and also in {other}")
+        fixture_owner[path] = group_id
+
 groups = []
 for g in cfg["groups"]:
+    fixtures = check_fixtures(g["id"], g.get("fixtures"))
+    claim_fixtures(g["id"], fixtures)
     files = []
     for spec in g["files"]:
         f, part = spec["path"], spec["part"]
@@ -393,11 +456,11 @@ for g in cfg["groups"]:
         print(f"warning: section {g['id']} has no data_flow; set it to [] if no data moves", file=sys.stderr)
     flows = check_flows(g["id"], g.get("data_flow", []))
     machines = check_flows(g["id"], g.get("state", []))
-    groups.append({**g, "files": files, "data_flow": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in flows),
+    groups.append({**g, "files": files, "fixtures": fixtures, "data_flow": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in flows),
                    "state": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in machines)})
 
 skips = tuple(cfg.get("skip_prefixes", []))
-missing = [f for f in git("diff", "--name-only", base, head).split() if f not in entries_by_path and not f.startswith(skips)]
+missing = [f for f in git("diff", "--name-only", base, head).split() if f not in entries_by_path and f not in fixture_owner and not f.startswith(skips)]
 if missing:
     sys.exit("changed files in no group:\n  " + "\n  ".join(missing))
 
@@ -415,6 +478,9 @@ def render_overview(ov):
     def stat(prefix):
         fs = [f for g in groups for f in g["files"] if f["path"].startswith(prefix)]
         return f'<span class="plus">+{sum(f["add"] for f in fs)}</span> <span class="minus">−{sum(f["rem"] for f in fs)}</span>'
+    for key in ("summary", "before", "after", "decisions"):
+        if isinstance(ov.get(key), str):
+            sys.exit(f"overview.{key} must be a list of HTML strings, not one string")
     parts = ['<section class="overview" id="overview"><h2>Overview</h2>']
     if ov.get("summary"):
         parts.append('<div class="ov-summary">' + "".join(f"<p>{p}</p>" for p in ov["summary"]) + "</div>")

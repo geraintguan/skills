@@ -134,6 +134,13 @@
         "src/retry.test.ts",
         {"path": "src/legacyRetry.ts", "lines": [{"line": 2, "side": "old", "text": "Retried immediately, with no delay."}]}
       ],
+      "fixtures": {
+        "summary": "Recorded server responses for the retry tests. They hold no logic, so they're listed here without diffs.",
+        "files": [
+          {"path": "fixtures/flaky-responses.json", "note": "Two 503s, then a 200: enough to need every attempt."},
+          {"path": "fixtures/invoice.pdf", "note": "A small binary body, for a response that isn't JSON."}
+        ]
+      },
       "tests": [
         {"file": "src/retry.test.ts", "name": "backoffDelay › doubles the delay on each attempt", "change": "Added", "type": "Unit",
          "inputs": "Attempts 0, 1 and 2 with a 100 ms base.", "expected": "<code>[100, 200, 400]</code>.",

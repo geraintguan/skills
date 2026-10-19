@@ -69,4 +69,9 @@ export async function getJson(url: string): Promise<unknown> {
   );
 }
 EOF
+mkdir -p fixtures
+cat > fixtures/flaky-responses.json <<'EOF'
+[{"status": 503}, {"status": 503}, {"status": 200, "body": {"ok": true}}]
+EOF
+printf '%%PDF-1.4\n\0\1\2\3 binary sample\n' > fixtures/invoice.pdf
 git add -A; git commit -qm "Retry with exponential backoff"
