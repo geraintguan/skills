@@ -33,7 +33,7 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 
 | Key | What it is |
 |---|---|
-| `summary` | HTML paragraphs. The first says what the change does and why. The second says how it's built. |
+| `summary` | A list of HTML paragraphs, even for one paragraph. The first says what the change does and why. The second says how it's built. |
 | `before`, `after` | HTML bullets. Parallel lists: each "after" bullet answers a "before" bullet. |
 | `graph` | The architecture as a graph (see "Diagrams"). Edges go from a component to what it uses. Group nodes by area, tag what the PR adds, changes or removes, and link each node to its code. Keep it under about 20 nodes. |
 | `diagram_caption` | One HTML line on how to read the diagram, and which parts are generic. |
