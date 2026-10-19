@@ -280,6 +280,16 @@ def embed_diagrams(where: str, value: Any) -> Any:
         return value
     return DIAGRAM_REF.sub(lambda m: embed_diagram(where, m), value)
 
+OVERVIEW_LISTS = ("summary", "before", "after", "decisions")
+
+def check_lists(where: str, section: dict[str, Any], keys: tuple[str, ...]) -> None:
+    """A string where a list belongs renders one character per item, such as a paragraph per letter."""
+    for key in keys:
+        if key in section and not (isinstance(section[key], list) and all(isinstance(item, str) for item in section[key])):
+            sys.exit(f"{where}: {key} must be a list of strings, one per item, not {type(section[key]).__name__}")
+
+check_lists("overview", cfg.get("overview") or {}, OVERVIEW_LISTS)
+check_lists("config", cfg, ("meta_extra", "skip_prefixes"))
 cfg["groups"] = [embed_diagrams(g["id"], g) for g in cfg["groups"]]
 if cfg.get("overview"):
     cfg["overview"] = embed_diagrams("overview", cfg["overview"])

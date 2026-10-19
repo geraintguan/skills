@@ -279,6 +279,8 @@ The builder fails on any of these:
 - a changed file in no section
 - a fixture path that matches no changed file, or a file listed both as a fixture and in
   `files`, or as a fixture in two sections
+- a single string where a list belongs: the overview's `summary`, `before`, `after` or
+  `decisions`, or `meta_extra` or `skip_prefixes`
 - an empty diff for a listed file
 - a line note outside the diff
 - an unknown change type, impact level or test type
