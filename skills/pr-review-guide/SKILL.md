@@ -47,7 +47,7 @@ From top to bottom:
 4. **Diagrams.** Each one sits in a stage you can drag to pan, pinch or Ctrl/⌘ + scroll
    to zoom, and open full screen. Hovering a node dims everything it isn't connected
    to. Nodes with a link jump to their section or file. Sequence diagrams have play
-   and step buttons that walk through the messages in order. Flowchart edges can be
+   and step buttons that walk through the messages in order. Graph edges can be
    animated, and nodes tagged added, changed or removed get matching colours. State
    machines start in their initial state; clicking a state or one of its events moves
    there, and the transitions out of the current state animate.
@@ -160,23 +160,23 @@ Never draw diagrams as ASCII art, hand-written SVG or images. There are three ki
 
 - **`graph`** ([React Flow](https://reactflow.dev/), laid out by
   [dagre](https://github.com/dagrejs/dagre)): nodes and edges as JSON. Use it for the
-  overview architecture, and for any "what uses what" picture where readers benefit from
-  dragging nodes (graphs start locked; the 🔒 button or L unlocks them), a minimap and
-  click-through to code. Nodes can carry a `detail` line, a `group`, a `status` and a
-  `link`. Edges tagged `added` or `changed` animate.
+  overview architecture, every flowchart or pipeline, and any "what uses what" picture.
+  Readers get a minimap, click-through to code, and nodes they can drag (graphs start
+  locked; the 🔒 button or L unlocks them). Nodes can carry a `detail` line, a `group`,
+  a `status`, a `link` and a `shape`: `decision` (a diamond for a branch), `terminal`
+  (a pill for a start or end) or `store` (a cache or database). Edges tagged `added` or
+  `changed` animate.
 - **`machine`** (React Flow too): a finite state machine as states and transitions.
   Readers step through it by clicking states or events. Use it for every state machine.
-- **[Mermaid](https://mermaid.js.org/)** source for everything else: `sequenceDiagram`
-  for call or event order (it gets step-through playback), `erDiagram` for schema
-  changes, and `flowchart` for small pipelines. Use `stateDiagram-v2` only inline in a
-  note, where a `machine` can't go. In a
-  flowchart, tag nodes with `:::added`, `:::changed` or `:::removed`, animate a new path
-  with `A e1@--> B` plus `e1@{ animate: true }`, and set `links` to make nodes clickable.
+- **[Mermaid](https://mermaid.js.org/)** source only for `sequenceDiagram` (call or
+  event order, with step-through playback) and `erDiagram` (schema changes). The
+  builder rejects Mermaid flowcharts and state diagrams: draw those as a `graph` or a
+  `machine`.
 
-The overview architecture goes in `overview.graph` (or `overview.diagram` for Mermaid).
-Anywhere else (a file note, a line note, a change item), put Mermaid source in
-`<pre class="mermaid">…</pre>` inside the HTML. The page themes both kinds to match,
-and renders each diagram when it scrolls into view.
+The overview architecture goes in `overview.graph`. For a diagram anywhere else (a file
+note, a line note, a change item), name it in the top-level `diagrams` and put
+`<div data-diagram="name"></div>` in the HTML where it goes. The page themes every
+diagram to match, and renders each one when it scrolls into view.
 
 #### Data flow diagrams
 
@@ -191,8 +191,9 @@ inputs, calls, events, cache and store reads and writes, responses and errors.
   Use `alt` for branches (success and error, cache hit and miss) and `loop` for retries
   and polling. Mark new or changed steps, for example with `Note over X: new`. Keep the
   messages in the order they happen: the play button walks through them in source order.
-- Use `sequenceDiagram` by default. Use a `flowchart LR` for a pipeline with no
-  back-and-forth. When data drives state changes, model the state in `state` instead.
+- Use `sequenceDiagram` by default. Use a `graph` with `direction: "LR"` for a
+  pipeline with no back-and-forth. When data drives state changes, model the state in
+  `state` instead.
 - A section where no data moves (copy, renames, config only) sets `data_flow: []`
   and says why in the section `lead`. The builder warns when the key is missing.
 
@@ -258,8 +259,10 @@ The builder fails on any of these:
 - a line note outside the diff
 - an unknown change type, impact level or test type
 - a test row for a file outside its section
-- a graph node or edge that names an unknown node, or a bad status or direction
+- a graph node or edge that names an unknown node, or a bad status, shape or direction
 - a diagram link to something that isn't a section id, a file in a section, or `overview`
+- Mermaid other than `sequenceDiagram` or `erDiagram`, inline `<pre class="mermaid">`, an
+  unknown flow key, or a `data-diagram` name missing from `diagrams`
 
 Fix the config and rebuild.
 

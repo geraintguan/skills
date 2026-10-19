@@ -10,6 +10,25 @@
   "meta_extra": ["Demo data"],
   "usage_file": "example-usage.json",
   "skip_prefixes": [],
+  "diagrams": {
+    "after-rejection": {
+      "graph": {
+        "direction": "LR",
+        "nodes": [
+          {"id": "rejects", "label": "fn rejects", "shape": "terminal"},
+          {"id": "left", "label": "attempts left?", "shape": "decision"},
+          {"id": "sleep", "label": "sleep backoffDelay(n)", "status": "added"},
+          {"id": "rethrow", "label": "rethrow last error", "shape": "terminal"}
+        ],
+        "edges": [
+          {"from": "rejects", "to": "left"},
+          {"from": "left", "to": "sleep", "label": "yes", "status": "added"},
+          {"from": "left", "to": "rethrow", "label": "no"}
+        ]
+      },
+      "caption": "The sleep is new. Before, the next attempt ran at once."
+    }
+  },
   "overview": {
     "summary": [
       "<code>getJson</code> retried three times back to back, and it treated HTTP errors as success. It now retries with exponential backoff and fails on any non-2xx response.",
@@ -82,7 +101,7 @@
         "deleted": [{"impact": "Low", "text": "<code>retryThreeTimes</code>. Its only caller moved to <code>withRetry</code>."}]
       },
       "files": [
-        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge.",
+        {"path": "src/retry.ts", "note": "Generic helper with no HTTP knowledge. Each rejection goes one of two ways:<div data-diagram=\"after-rejection\"></div>",
          "lines": [
            {"line": 4, "text": "Delay doubles each attempt: 200, 400, 800 ms for a 200 ms base.", "impact": "Low"},
            {"line": 14, "text": "No sleep after the last attempt, so a failure surfaces right away.", "impact": "Medium"}
@@ -106,8 +125,22 @@
         "caption": "The <code>response.ok</code> check turns a 500 into a rejection that <code>withRetry</code> retries."
       }, {
         "title": "Where a failed response goes",
-        "diagram": "flowchart LR\n  F[\"fetch(url)\"] --> OK{\"response.ok?\"}\n  OK -->|yes| J[\"response.json()\"]\n  OK e1@-->|no| T[\"throw HTTP status\"]:::added\n  T e2@--> R[\"withRetry\"]\n  e1@{ animate: true }\n  e2@{ animate: true }",
-        "links": {"R": "src/retry.ts", "OK": "src/client.ts"},
+        "graph": {
+          "direction": "LR",
+          "nodes": [
+            {"id": "fetch", "label": "fetch(url)", "shape": "terminal"},
+            {"id": "ok", "label": "response.ok?", "shape": "decision", "link": "src/client.ts"},
+            {"id": "json", "label": "response.json()"},
+            {"id": "throw", "label": "throw HTTP status", "status": "added"},
+            {"id": "retry", "label": "withRetry", "link": "src/retry.ts"}
+          ],
+          "edges": [
+            {"from": "fetch", "to": "ok"},
+            {"from": "ok", "to": "json", "label": "yes"},
+            {"from": "ok", "to": "throw", "label": "no", "status": "added"},
+            {"from": "throw", "to": "retry", "status": "added"}
+          ]
+        },
         "caption": "The animated path is new: a non-2xx response now throws, so <code>withRetry</code> retries it."
       }],
       "changes": {
