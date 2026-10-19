@@ -55,7 +55,21 @@
     "diagram_caption": "Arrows point from a function to what it calls. Click a node to open its code.",
     "data_flow": [
       {"title": "One <code>getJson</code> call",
-       "diagram": "sequenceDiagram\n  participant App as caller\n  participant C as getJson\n  participant R as withRetry\n  participant S as server\n  App->>C: url\n  C->>R: request fn, 3 attempts, 200 ms base\n  loop up to 3 attempts\n    R->>S: fetch(url)\n    alt 2xx\n      S-->>R: JSON body\n    else non-2xx or network error\n      S-->>R: error\n      R->>R: wait backoffDelay(n)\n    end\n  end\n  R-->>C: parsed JSON or last error\n  C-->>App: data, or throws",
+       "sequence": {
+         "participants": [
+           {"id": "app", "label": "caller", "detail": "unchanged callers"},
+           {"id": "client", "label": "getJson", "detail": "src/client.ts", "status": "changed", "link": "src/client.ts"},
+           {"id": "retry", "label": "withRetry", "detail": "src/retry.ts", "status": "added", "link": "src/retry.ts"},
+           {"id": "server", "label": "server"}
+         ],
+         "steps": [
+           {"from": "app", "to": "client", "label": "url"},
+           {"from": "client", "to": "retry", "label": "request fn, 3 attempts, 200 ms base", "status": "added"},
+           {"loop": "up to 3 attempts", "steps": [{"from": "retry", "to": "server", "label": "fetch(url)"}, {"alt": [{"when": "2xx", "steps": [{"from": "server", "to": "retry", "label": "JSON body", "reply": true}]}, {"when": "non-2xx or network error", "steps": [{"from": "server", "to": "retry", "label": "error", "reply": true}, {"from": "retry", "to": "retry", "label": "wait backoffDelay(n)", "status": "added"}]}]}]},
+           {"from": "retry", "to": "client", "label": "parsed JSON or last error", "reply": true},
+           {"from": "client", "to": "app", "label": "data, or throws", "reply": true}
+         ]
+       },
        "caption": "Errors now flow back to the caller instead of arriving as data."}
     ],
     "layout": [
@@ -71,7 +85,18 @@
       "bridge": "Everything else builds on one new helper, so read it first.",
       "lead": "Start with the loop in <code>withRetry</code>.",
       "data_flow": [{
-        "diagram": "sequenceDiagram\n  participant C as caller\n  participant R as withRetry\n  participant F as fn\n  C->>R: fn, {attempts, baseDelayMs}\n  loop attempt n = 0 .. attempts - 1\n    R->>F: call\n    alt resolves\n      F-->>R: value\n      R-->>C: value\n    else rejects, not last attempt\n      F-->>R: error\n      R->>R: sleep backoffDelay(n)\n    end\n  end\n  R-->>C: rethrow last error",
+        "sequence": {
+          "participants": [
+            {"id": "caller", "label": "caller"},
+            {"id": "retry", "label": "withRetry", "link": "src/retry.ts"},
+            {"id": "fn", "label": "fn"}
+          ],
+          "steps": [
+            {"from": "caller", "to": "retry", "label": "fn, {attempts, baseDelayMs}"},
+            {"loop": "attempt n = 0 .. attempts - 1", "steps": [{"from": "retry", "to": "fn", "label": "call"}, {"alt": [{"when": "resolves", "steps": [{"from": "fn", "to": "retry", "label": "value", "reply": true}, {"from": "retry", "to": "caller", "label": "value", "reply": true}]}, {"when": "rejects, not last attempt", "steps": [{"from": "fn", "to": "retry", "label": "error", "reply": true}, {"from": "retry", "to": "retry", "label": "sleep backoffDelay(n)", "status": "added"}]}]}]},
+            {"from": "retry", "to": "caller", "label": "rethrow last error", "reply": true}
+          ]
+        },
         "caption": "No sleep after the last attempt."
       }],
       "state": [{
@@ -121,7 +146,19 @@
       "bridge": "With <code>withRetry</code> in place, the client can lean on it. The one real change is deciding what counts as a failure.",
       "lead": "Check the <code>response.ok</code> guard.",
       "data_flow": [{
-        "diagram": "sequenceDiagram\n  participant R as withRetry\n  participant C as getJson attempt\n  participant S as server\n  R->>C: run attempt\n  C->>S: fetch(url)\n  S-->>C: response\n  alt response.ok\n    C-->>R: response.json()\n  else not ok\n    C-->>R: throw HTTP status\n  end",
+        "sequence": {
+          "participants": [
+            {"id": "retry", "label": "withRetry", "link": "src/retry.ts"},
+            {"id": "attempt", "label": "getJson attempt", "link": "src/client.ts"},
+            {"id": "server", "label": "server"}
+          ],
+          "steps": [
+            {"from": "retry", "to": "attempt", "label": "run attempt"},
+            {"from": "attempt", "to": "server", "label": "fetch(url)"},
+            {"from": "server", "to": "attempt", "label": "response", "reply": true},
+            {"alt": [{"when": "response.ok", "steps": [{"from": "attempt", "to": "retry", "label": "response.json()", "reply": true}]}, {"when": "not ok", "steps": [{"note": "new: a non-2xx response is a failure", "over": ["attempt"], "status": "added"}, {"from": "attempt", "to": "retry", "label": "throw HTTP status", "reply": true, "status": "added"}]}]}
+          ]
+        },
         "caption": "The <code>response.ok</code> check turns a 500 into a rejection that <code>withRetry</code> retries."
       }, {
         "title": "Where a failed response goes",

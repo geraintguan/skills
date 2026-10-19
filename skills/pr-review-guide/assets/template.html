@@ -229,13 +229,6 @@ body.dia-lock { overflow: hidden; }
 .lib-warning ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font: 12px var(--mono); }
 .dia-failed { margin: 0; padding: 12px; border: 1px dashed var(--imp-med); border-radius: 6px; color: var(--imp-med); font-size: 13px; }
 
-/* Sequence diagrams: stepping dims later messages and animates the current one. */
-.dia svg [data-et="message"], .dia svg .messageText { cursor: pointer; transition: opacity .2s; }
-.dia svg.seq-stepping [data-et="message"], .dia svg.seq-stepping .messageText { opacity: .12; }
-.dia svg.seq-stepping :is(.seq-past, .seq-now) { opacity: 1; }
-.dia svg :is(line, path).seq-now { stroke: var(--accent) !important; stroke-width: 2.5px !important; stroke-dasharray: 8 5 !important; animation: seq-dash .6s linear infinite; }
-.dia svg text.seq-now { fill: var(--accent) !important; font-weight: 600; }
-@keyframes seq-dash { to { stroke-dashoffset: -13; } }
 
 
 .dia-view.rf { cursor: default; touch-action: auto; }
@@ -272,6 +265,28 @@ body.dia-lock { overflow: hidden; }
 .dia .react-flow__edge.on .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
 .dia .react-flow__edge:is(.added, .changed, .removed) .react-flow__edge-path { stroke: var(--st-fg); }
 .dia .react-flow__edge.removed .react-flow__edge-path { stroke-dasharray: var(--st-dash); }
+/* Sequences: messages run along the bottom of their row; stepping fades later ones and animates the current one. */
+.rf-msg { position: relative; width: 100%; height: 100%; cursor: pointer; color: var(--fg); transition: opacity .2s; }
+.rf-msg svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.rf-msg path { fill: none; stroke: var(--st-fg, var(--muted)); stroke-width: 1.5px; }
+.rf-msg polygon { fill: var(--st-fg, var(--muted)); }
+.rf-msg.reply path, .rf-msg.removed path { stroke-dasharray: 5 4; }
+.rf-msg-label { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: 12px; white-space: nowrap; }
+.rf-msg-label span { background: var(--bg); padding: 0 4px; border-radius: 3px; }
+.rf-msg.self .rf-msg-label { text-align: left; left: 44px; right: auto; top: 26px; }
+.rf-msg.later, .dia .react-flow__node.dim .rf-msg { opacity: .15; }
+.rf-msg.now path { stroke: var(--accent); stroke-width: 2.5px; stroke-dasharray: 8 5; animation: seq-dash .6s linear infinite; }
+.rf-msg.now polygon { fill: var(--accent); }
+@keyframes seq-dash { to { stroke-dashoffset: -13; } }
+.rf-msg.now .rf-msg-label { color: var(--accent); font-weight: 600; }
+.rf-lifeline { width: 100%; height: 100%; border-left: 1px dashed var(--muted); opacity: .6; }
+.rf-note { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 0 10px; border: 1px dashed var(--line); border-radius: 4px; background: var(--soft); font-size: 12px; white-space: nowrap; }
+.rf-note:is(.added, .changed, .removed) { border-color: var(--st-fg); background: var(--st-bg); }
+.rf-frag { position: relative; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 4px; }
+.rf-frag:is(.added, .changed, .removed) { border-color: var(--st-fg); }
+.rf-frag-head { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.rf-frag-tag { font: 600 10px/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 5px 7px; background: var(--soft); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 4px 0 4px 0; color: var(--fg); }
+.rf-frag-else { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); padding: 5px 8px; font-size: 12px; color: var(--muted); }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .ov-flows { display: flex; flex-direction: column; gap: 12px; }
 .ov-layout { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
@@ -652,8 +667,8 @@ function mermaidTheme() {
 const STATUS_FG = { added: "--add-fg", changed: "--imp-med", removed: "--del-fg" };
 const STATUSES = Object.keys(STATUS_FG);
 
-function statusLegend(graph) {
-  const shown = STATUSES.filter((s) => graph.nodes.some((n) => n.status === s) || graph.edges.some((e) => e.status === s));
+function statusLegend(items) {
+  const shown = STATUSES.filter((s) => items.some((item) => item.status === s));
   return shown.length ? `<span class="dia-legend">${shown.map((s) => `<span class="dia-chip ${s}">${s}</span>`).join("")}</span>` : "";
 }
 
@@ -797,45 +812,13 @@ function svgPanZoom(stage, svg) {
 
 const STEP_MS = 1100;
 
-function sequenceSteps(stage, svg) {
-  const lines = [...svg.querySelectorAll('[data-et="message"]')].sort((a, b) => +a.dataset.id.slice(1) - +b.dataset.id.slice(1));
-  if (!lines.length && svg.querySelector(".messageText")) reportDiagramProblem("Sequence playback is off: Mermaid's output no longer marks its messages");
-  const steps = lines.map((line) => {
-    const label = line.previousElementSibling;
-    return label?.classList.contains("messageText") ? [label, line] : [line];
-  });
-  const count = stage.querySelector(".dia-count"), play = stage.querySelector('[data-act="play"]');
-  let at = -1, timer = null;
-  const show = (i) => {
-    at = Math.max(-1, Math.min(steps.length - 1, i));
-    svg.classList.toggle("seq-stepping", at >= 0);
-    steps.forEach((els, j) => els.forEach((el) => { el.classList.toggle("seq-past", j < at); el.classList.toggle("seq-now", j === at); }));
-    count.textContent = at < 0 ? `${steps.length} messages` : `${at + 1} / ${steps.length}`;
-  };
-  const stop = () => { clearInterval(timer); timer = null; play.textContent = "▶"; play.setAttribute("aria-pressed", "false"); };
-  const toggle = () => {
-    if (timer) { stop(); return; }
-    show(at >= steps.length - 1 ? 0 : at + 1);
-    play.textContent = "⏸"; play.setAttribute("aria-pressed", "true");
-    timer = setInterval(() => (at >= steps.length - 1 ? stop() : show(at + 1)), STEP_MS);
-  };
-  const go = (i) => { stop(); show(i); };
-  steps.forEach((els, j) => els.forEach((el) => el.addEventListener("click", () => go(j))));
-  show(-1);
-  return { all: () => go(-1), prev: () => go(at - 1), next: () => go(at + 1), play: toggle };
-}
-
 async function renderMermaid(mermaid, pre) {
   await mermaid.run({ nodes: [pre] });
   const svg = pre.querySelector("svg");
-  const kind = svg?.getAttribute("aria-roledescription");
-  if (!svg || kind === "error") return;
-  const isSequence = kind === "sequence";
-  const stage = createStage({ steps: isSequence, hints: isSequence ? ["▶ plays the messages in order; click one to jump to it"] : [] });
+  if (!svg || svg.getAttribute("aria-roledescription") === "error") return;
+  const stage = createStage({});
   pre.replaceWith(stage);
-  const view = svgPanZoom(stage, svg);
-  if (isSequence) view.steps = sequenceSteps(stage, svg);
-  bindStage(stage, view);
+  bindStage(stage, svgPanZoom(stage, svg));
 }
 
 let xyflow;
@@ -848,6 +831,7 @@ function loadXyflow() {
 }
 
 const GROUP_LABEL_H = 24;
+const cls = (...parts) => parts.filter(Boolean).join(" ");
 
 function estimatedSize(n) {
   const chars = Math.max(n.label.length, (n.detail || "").length * 0.9);
@@ -908,14 +892,14 @@ function graphNodeTypes({ React, flow }) {
   // In a machine a click moves to the state, so its code link gets its own button.
   const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", title: "Open its code", onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
   const card = ({ data, sourcePosition, targetPosition }) => h("div", {
-    className: ["rf-card", data.status, data.shape, data.final && "final", data.link && !data.machine && "linked"].filter(Boolean).join(" "),
+    className: cls("rf-card", data.status, data.shape, data.final && "final", data.link && !data.machine && "linked"),
     title: data.link && !data.machine ? "Open its code" : undefined,
   },
     h(flow.Handle, { type: "target", position: targetPosition, isConnectable: false }),
     data.shape === "decision" ? diamond : null,
     h("div", { className: "rf-label" }, data.label),
     data.detail ? h("div", { className: "rf-detail" }, data.detail) : null,
-    data.loops.length ? h("div", { className: "rf-loops" }, `↻ ${data.loops.join(", ")}`) : null,
+    data.loops?.length ? h("div", { className: "rf-loops" }, `↻ ${data.loops.join(", ")}`) : null,
     data.initial ? h("span", { className: "rf-badge start" }, "start") : null,
     data.status ? h("span", { className: `rf-badge ${data.status}` }, data.status) : null,
     data.link && data.machine ? codeButton(data.link) : null,
@@ -962,6 +946,32 @@ function MachinePanel({ lib, graph, current, setCurrent }) {
     current !== graph.machine.initial ? h("button", { type: "button", className: "dia-btn", onClick: () => setCurrent(graph.machine.initial) }, "Reset") : null);
 }
 
+// Binds the stage's buttons and keys to React Flow's viewport, plus any extra actions. Returns whether it's full screen.
+// The stage binds once, so extra actions are read through a ref and always see the latest render's state.
+function useFlowStage({ React, flow }, stage, extra) {
+  const [full, setFull] = React.useState(false);
+  const rf = flow.useReactFlow();
+  const latest = React.useRef(extra);
+  latest.current = extra;
+  React.useEffect(() => bindStage(stage, {
+    zoomBy: (f) => rf.zoomTo(rf.getZoom() * f, { duration: 150 }),
+    fit: () => rf.fitView({ padding: 0.08, duration: 200 }),
+    panBy: (dx, dy) => { const v = rf.getViewport(); rf.setViewport({ ...v, x: v.x + dx, y: v.y + dy }); },
+    onMode: setFull,
+    toggleLock: () => latest.current.toggleLock?.(),
+    steps: extra.steps && Object.fromEntries(Object.keys(extra.steps).map((k) => [k, () => latest.current.steps[k]()])),
+  }), []);
+  return full;
+}
+
+// What every React Flow view shares: theme, zoom limits, no editing, and the wheel only zooms in full screen.
+function flowProps(full) {
+  return { colorMode: "dark", fitView: true, fitViewOptions: { padding: 0.08 }, minZoom: 0.2, maxZoom: 2.5,
+    nodesConnectable: false, elementsSelectable: false, zoomOnScroll: full, preventScrolling: full };
+}
+
+const flowBackground = ({ React, flow }) => React.createElement(flow.Background, { gap: 18, size: 1, color: cssVar("--line") });
+
 // Lays out once from estimated sizes, then again from the sizes React Flow measures, hidden until then.
 // Scrolling over an inline graph scrolls the page; full screen hands the wheel to React Flow.
 // Nodes start locked so a stray drag pans instead of moving them.
@@ -970,70 +980,256 @@ function GraphView({ lib, graph, initial, stage }) {
   const nodeTypes = React.useMemo(() => graphNodeTypes(lib), []);
   const [nodes, setNodes, onNodesChange] = flow.useNodesState(initial.nodes);
   const [hover, setHover] = React.useState(null);
-  const [full, setFull] = React.useState(false);
   const [locked, setLocked] = React.useState(true);
   const [measured, setMeasured] = React.useState(false);
   const [current, setCurrent] = React.useState(graph.machine?.initial ?? null);
   const rf = flow.useReactFlow();
   const initialized = flow.useNodesInitialized();
-  React.useEffect(() => bindStage(stage, {
-    zoomBy: (f) => rf.zoomTo(rf.getZoom() * f, { duration: 150 }),
-    fit: () => rf.fitView({ padding: 0.08, duration: 200 }),
-    panBy: (dx, dy) => { const v = rf.getViewport(); rf.setViewport({ ...v, x: v.x + dx, y: v.y + dy }); },
-    onMode: setFull,
-    toggleLock: () => setLocked((l) => !l),
-  }), []);
+  const full = useFlowStage(lib, stage, { toggleLock: () => setLocked((l) => !l) });
   React.useEffect(() => showLocked(stage, locked), [locked]);
   React.useEffect(() => {
     if (!initialized || measured) return;
     const sizes = new Map(rf.getNodes().filter((n) => n.type === "card" && n.measured).map((n) => [n.id, n.measured]));
     const next = layoutGraph(lib, graph, sizes);
     setNodes(next.nodes);
-    sizeView(stage.querySelector(".dia-view"), next, graph);
+    sizeView(stage.querySelector(".dia-view"), next, panelHeight(graph));
     setMeasured(true);
     requestAnimationFrame(() => requestAnimationFrame(() => rf.fitView({ padding: 0.08 })));
   }, [initialized]);
   const shown = React.useMemo(() => withHoverClasses(withMachineClasses(nodes, initial.edges, current), hover), [nodes, hover, current]);
   return h("div", { className: "rf-frame" }, h("div", { className: "rf-canvas" }, h(flow.ReactFlow, {
-    nodes: shown.nodes, edges: shown.edges, onNodesChange, nodeTypes, colorMode: "dark", style: { opacity: measured ? 1 : 0 },
-    fitView: true, fitViewOptions: { padding: 0.08 }, minZoom: 0.2, maxZoom: 2.5,
-    nodesDraggable: !locked, nodesConnectable: false, elementsSelectable: false, zoomOnScroll: full, preventScrolling: full,
+    ...flowProps(full), nodes: shown.nodes, edges: shown.edges, onNodesChange, nodeTypes, style: { opacity: measured ? 1 : 0 },
+    nodesDraggable: !locked,
     onNodeMouseEnter: (_, n) => { if (n.type !== "cluster") setHover(n.id); }, onNodeMouseLeave: () => setHover(null),
     onNodeClick: (_, n) => {
       if (graph.machine) { if (n.type === "card") setCurrent(n.id); }
       else if (n.data.link) jumpTo(n.data.link);
     },
-  }, h(flow.Background, { gap: 18, size: 1, color: cssVar("--line") }),
+  }, flowBackground(lib),
     initial.nodes.length > 8 ? h(flow.MiniMap, { pannable: true, zoomable: true, nodeColor: cssVar("--accent-soft"), maskColor: "rgba(0, 0, 0, .45)" }) : null)),
     graph.machine ? h(MachinePanel, { lib, graph, current, setCurrent }) : null);
 }
 
 const SIM_PANEL_H = 40;
+const panelHeight = (graph) => (graph.machine ? SIM_PANEL_H : 0);
 
-// Inline height: the layout scaled to the view's width, plus the machine's event panel.
-function sizeView(view, layout, graph) {
+// Inline height: the layout scaled to the view's width, plus any panel under the diagram.
+function sizeView(view, layout, panel) {
   const scale = Math.min(1, view.clientWidth / layout.width);
-  const extra = graph.machine ? SIM_PANEL_H : 0;
-  view.style.height = `${Math.round(Math.min(Math.max(layout.height * scale + 48, 200), innerHeight * 0.7) + extra)}px`;
+  view.style.height = `${Math.round(Math.min(Math.max(layout.height * scale + 48, 200), innerHeight * 0.7) + panel)}px`;
+}
+
+// Replaces the placeholder with a stage and renders a React Flow view into it.
+function mountFlow(host, lib, stageOptions, layout, panel, view) {
+  const stage = createStage(stageOptions);
+  host.replaceWith(stage);
+  const el = stage.querySelector(".dia-view");
+  el.classList.add("rf");
+  sizeView(el, layout, panel);
+  const { React, flow } = lib;
+  // A second copy of React makes React Flow's hooks throw while rendering.
+  const onUncaughtError = (err) => { reportDiagramProblem("A graph failed to render, usually because two copies of React loaded", err); showDiagramFailed(el); };
+  lib.createRoot(el, { onUncaughtError }).render(React.createElement(flow.ReactFlowProvider, null, view(stage)));
 }
 
 async function renderGraph(host) {
-  const graph = JSON.parse(host.dataset.graph);
+  const graph = JSON.parse(host.dataset.spec);
   const lib = await loadXyflow();
   const initial = layoutGraph(lib, graph);
   const hints = [graph.machine ? "click a state or an event to move through the machine" : "unlock 🔒 to drag nodes", "hover a node to trace it",
     graph.nodes.some((n) => n.link) && (graph.machine ? "code ↗ opens a state's code" : "click an underlined node to open its code"),
-    statusLegend(graph)].filter(Boolean);
-  const stage = createStage({ lock: true, hints });
-  host.replaceWith(stage);
-  const view = stage.querySelector(".dia-view");
-  view.classList.add("rf");
-  sizeView(view, initial, graph);
-  const { React, flow } = lib;
-  // A second copy of React makes React Flow's hooks throw while rendering.
-  const onUncaughtError = (err) => { reportDiagramProblem("A graph failed to render, usually because two copies of React loaded", err); showDiagramFailed(view); };
-  lib.createRoot(view, { onUncaughtError }).render(React.createElement(flow.ReactFlowProvider, null, React.createElement(GraphView, { lib, graph, initial, stage })));
+    statusLegend([...graph.nodes, ...graph.edges])].filter(Boolean);
+  mountFlow(host, lib, { lock: true, hints }, initial, panelHeight(graph), (stage) => lib.React.createElement(GraphView, { lib, graph, initial, stage }));
 }
+
+// Sequence diagrams: participants are columns, and each message, note or fragment edge is a row.
+const SEQ = { gap: 28, row: 40, selfRow: 56, selfLoop: 40, note: 36, fragHead: 30, fragFoot: 12, elseRow: 28, fragPad: 22, tail: 16 };
+const textWidth = (s) => s.length * 6.6 + 8;
+const isMessage = (step) => "from" in step;
+const isNote = (step) => "note" in step;
+const fragmentKind = (step) => ["alt", "loop", "opt"].find((k) => k in step);
+const fragmentBranches = (step) => (step.alt ?? [{ when: step[fragmentKind(step)], steps: step.steps }]);
+
+function allSteps(steps) {
+  return steps.flatMap((s) => (isMessage(s) || isNote(s) ? [s] : [s, ...fragmentBranches(s).flatMap((b) => allSteps(b.steps))]));
+}
+
+// Column centres: wide enough for each header, and for each message label between its two columns.
+function sequenceColumns(spec) {
+  const index = new Map(spec.participants.map((p, i) => [p.id, i]));
+  const widths = spec.participants.map((p) => estimatedSize(p).width);
+  const gaps = widths.slice(1).map((w, i) => (widths[i] + w) / 2 + SEQ.gap);
+  for (const m of allSteps(spec.steps).filter(isMessage)) {
+    const [a, b] = [index.get(m.from), index.get(m.to)].sort((x, y) => x - y);
+    if (a === b) { if (a < gaps.length) gaps[a] = Math.max(gaps[a], textWidth(m.label) + SEQ.selfLoop + 16); continue; }
+    const have = gaps.slice(a, b).reduce((sum, g) => sum + g, 0), need = textWidth(m.label) + 40;
+    if (have < need) for (let i = a; i < b; i++) gaps[i] += (need - have) / (b - a);
+  }
+  const centres = [widths[0] / 2];
+  gaps.forEach((g) => centres.push(centres.at(-1) + g));
+  return { index, widths, centres };
+}
+
+const union = (a, b) => (!a ? b : !b ? a : { x1: Math.min(a.x1, b.x1), x2: Math.max(a.x2, b.x2) });
+
+// Places steps from ctx.y down, appending nodes to ctx.nodes. Returns the horizontal extent they cover.
+function placeSteps(steps, ctx) {
+  let extent = null;
+  for (const step of steps) {
+    if (isMessage(step)) extent = union(extent, placeMessage(step, ctx));
+    else if (isNote(step)) extent = union(extent, placeNote(step, ctx));
+    else extent = union(extent, placeFragment(step, ctx));
+  }
+  return extent;
+}
+
+function placeMessage(step, ctx) {
+  const x1 = ctx.x(step.from), x2 = ctx.x(step.to), self = step.from === step.to;
+  const width = self ? textWidth(step.label) + SEQ.selfLoop : Math.abs(x2 - x1), height = self ? SEQ.selfRow : SEQ.row;
+  const index = ctx.messages++;
+  ctx.nodes.push({ id: `m${index}`, type: "message", position: { x: Math.min(x1, x2), y: ctx.y }, style: { width, height }, zIndex: 2,
+    data: { ...step, index, width, height, self, leftward: x2 < x1 } });
+  ctx.y += height;
+  return { x1: Math.min(x1, x2), x2: Math.min(x1, x2) + width };
+}
+
+function placeNote(step, ctx) {
+  const xs = step.over.map(ctx.x), centre = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const width = Math.max(textWidth(step.note) + 24, Math.max(...xs) - Math.min(...xs) + 80);
+  ctx.nodes.push({ id: `n${ctx.nodes.length}`, type: "note", position: { x: centre - width / 2, y: ctx.y + 4 }, style: { width, height: SEQ.note - 8 }, zIndex: 1, data: step });
+  ctx.y += SEQ.note;
+  return { x1: centre - width / 2, x2: centre + width / 2 };
+}
+
+function placeFragment(step, ctx) {
+  const kind = fragmentKind(step), branches = fragmentBranches(step), top = ctx.y;
+  // Its slot comes before its contents so it draws underneath them; nested fragments take later slots and draw on top.
+  const slot = ctx.nodes.push(null) - 1;
+  ctx.y += SEQ.fragHead;
+  const sections = [];
+  let inner = null;
+  branches.forEach((branch, i) => {
+    if (i > 0) { sections.push({ y: ctx.y - top, label: branch.when }); ctx.y += SEQ.elseRow; }
+    inner = union(inner, placeSteps(branch.steps, ctx));
+  });
+  ctx.y += SEQ.fragFoot;
+  const x1 = inner.x1 - SEQ.fragPad, x2 = Math.max(inner.x2 + SEQ.fragPad, x1 + textWidth(`${kind} ${branches[0].when}`) + 40);
+  ctx.nodes[slot] = { id: `f${slot}`, type: "fragment", position: { x: x1, y: top }, style: { width: x2 - x1, height: ctx.y - top }, zIndex: 0,
+    data: { kind, label: branches[0].when, sections, status: step.status } };
+  return { x1, x2 };
+}
+
+// Returns React Flow nodes for a sequence spec, shifted so the leftmost one sits at x = 0.
+function layoutSequence(spec) {
+  const { index, widths, centres } = sequenceColumns(spec);
+  const head = Math.max(...spec.participants.map((p) => estimatedSize(p).height));
+  const ctx = { nodes: [], messages: 0, y: head + SEQ.gap, x: (id) => centres[index.get(id)] };
+  placeSteps(spec.steps, ctx);
+  const bottom = ctx.y + SEQ.tail;
+  spec.participants.forEach((p, i) => {
+    const data = { ...p, side: "bottom" }, x = centres[i] - widths[i] / 2, style = { width: widths[i] };
+    ctx.nodes.push({ id: `p-${p.id}`, type: "card", position: { x, y: 0 }, style, zIndex: 3, data },
+      { id: `p-${p.id}-end`, type: "card", position: { x, y: bottom }, style, zIndex: 3, data },
+      { id: `life-${p.id}`, type: "lifeline", position: { x: centres[i], y: head }, style: { width: 1, height: bottom - head }, zIndex: -1, data: {} });
+  });
+  const left = Math.min(...ctx.nodes.map((n) => n.position.x));
+  const right = Math.max(...ctx.nodes.map((n) => n.position.x + n.style.width));
+  const nodes = ctx.nodes.map((n) => ({ ...n, position: { x: n.position.x - left, y: n.position.y }, draggable: false, selectable: false }));
+  return { nodes, messages: ctx.messages, width: right - left, height: bottom + head };
+}
+
+function sequenceNodeTypes(lib) {
+  const { React } = lib;
+  const h = React.createElement;
+  // Self messages loop out to the right and back; others run along the bottom of their row, flipped for leftward ones.
+  const message = ({ data }) => {
+    const { width: w, height: hgt, self } = data, y = hgt - 8;
+    const path = self ? `M0 22 H${SEQ.selfLoop - 8} V${y} H8` : `M0 ${y} H${w - 8}`;
+    const head = self ? `0,${y} 9,${y - 4.5} 9,${y + 4.5}` : `${w},${y} ${w - 9},${y - 4.5} ${w - 9},${y + 4.5}`;
+    return h("div", { className: cls("rf-msg", data.status, data.reply && "reply", self && "self", data.state), title: "Show this step" },
+      h("svg", { width: w, height: hgt, style: data.leftward ? { transform: "scaleX(-1)" } : undefined, "aria-hidden": true },
+        h("path", { d: path }), h("polygon", { points: head })),
+      h("div", { className: "rf-msg-label" }, h("span", null, data.label)));
+  };
+  const note = ({ data }) => h("div", { className: cls("rf-note", data.status) }, data.note);
+  const fragment = ({ data }) => h("div", { className: cls("rf-frag", data.status) },
+    h("div", { className: "rf-frag-head" }, h("span", { className: "rf-frag-tag" }, data.kind), h("span", null, `[${data.label}]`)),
+    ...data.sections.map((s, i) => h("div", { key: i, className: "rf-frag-else", style: { top: s.y } }, `[${s.label}]`)));
+  const lifeline = () => h("div", { className: "rf-lifeline" });
+  return { ...graphNodeTypes(lib), message, note, fragment, lifeline };
+}
+
+// Steps through a sequence's messages: -1 shows them all, and playing advances one step every STEP_MS.
+function useSequencePlayer(React, count) {
+  const [at, setAt] = React.useState(-1);
+  const [playing, setPlaying] = React.useState(false);
+  React.useEffect(() => {
+    if (!playing) return undefined;
+    if (at >= count - 1) { setPlaying(false); return undefined; }
+    const timer = setTimeout(() => setAt(at + 1), STEP_MS);
+    return () => clearTimeout(timer);
+  }, [playing, at]);
+  const clamp = (i) => Math.max(-1, Math.min(count - 1, i));
+  const go = (i) => { setPlaying(false); setAt(clamp(i)); };
+  const step = (delta) => { setPlaying(false); setAt((i) => clamp(i + delta)); };
+  const toggle = () => {
+    if (playing) { setPlaying(false); return; }
+    setAt((i) => (i >= count - 1 ? 0 : i + 1));
+    setPlaying(true);
+  };
+  return { at, playing, go, step, toggle };
+}
+
+function showStep(stage, { at, playing }, count) {
+  stage.querySelector(".dia-count").textContent = at < 0 ? `${count} messages` : `${at + 1} / ${count}`;
+  const play = stage.querySelector('[data-act="play"]');
+  play.textContent = playing ? "⏸" : "▶";
+  play.setAttribute("aria-pressed", String(playing));
+}
+
+const stepState = (i, at) => (at < 0 ? "" : i < at ? "past" : i === at ? "now" : "later");
+const touches = (n, id) => n.data.from === id || n.data.to === id;
+
+// While stepping, later messages fade and the current one animates. Hovering a participant fades messages that don't touch it.
+// Nodes whose classes don't change are returned as they are, so React Flow only re-renders the ones that do.
+function withSequenceClasses(nodes, at, hover) {
+  return nodes.map((n) => {
+    if (n.type !== "message") return n;
+    const className = hover && !touches(n, hover) ? "dim" : "", state = stepState(n.data.index, at);
+    return className === (n.className ?? "") && state === (n.data.state ?? "") ? n : { ...n, className, data: { ...n.data, state } };
+  });
+}
+
+function SequenceView({ lib, layout, stage }) {
+  const { React, flow } = lib, h = React.createElement;
+  const nodeTypes = React.useMemo(() => sequenceNodeTypes(lib), []);
+  const [hover, setHover] = React.useState(null);
+  const player = useSequencePlayer(React, layout.messages);
+  const full = useFlowStage(lib, stage, { steps: { all: () => player.go(-1), prev: () => player.step(-1), next: () => player.step(1), play: player.toggle } });
+  React.useEffect(() => showStep(stage, player, layout.messages), [player.at, player.playing]);
+  const shown = React.useRef(layout.nodes);
+  const nodes = React.useMemo(() => (shown.current = withSequenceClasses(shown.current, player.at, hover)), [player.at, hover]);
+  return h(flow.ReactFlow, {
+    ...flowProps(full), nodes, edges: [], nodeTypes, nodesDraggable: false,
+    onNodeMouseEnter: (_, n) => { if (n.type === "card") setHover(n.data.id); }, onNodeMouseLeave: () => setHover(null),
+    onNodeClick: (_, n) => {
+      if (n.type === "message") player.go(n.data.index);
+      else if (n.type === "card" && n.data.link) jumpTo(n.data.link);
+    },
+  }, flowBackground(lib));
+}
+
+async function renderSequence(host) {
+  const spec = JSON.parse(host.dataset.spec);
+  const lib = await loadXyflow();
+  const layout = layoutSequence(spec);
+  const hints = ["▶ plays the messages in order; click one to jump to it", "hover a participant to trace it",
+    spec.participants.some((p) => p.link) && "click an underlined participant to open its code",
+    statusLegend([...spec.participants, ...allSteps(spec.steps)])].filter(Boolean);
+  mountFlow(host, lib, { steps: true, hints }, layout, 0, (stage) => lib.React.createElement(SequenceView, { lib, layout, stage }));
+}
+
+const FLOW_RENDERERS = { graph: renderGraph, sequence: renderSequence };
 
 // Mermaid and React Flow both measure text while laying out, so a diagram inside a collapsed
 // section or file is rendered only once it scrolls into view.
@@ -1046,7 +1242,7 @@ async function renderDiagrams() {
     return m;
   }) : null;
   if (charts.length < diagrams.length) loadXyflow();
-  const render = (el) => (el.matches(".rf-graph") ? renderGraph(el) : mermaid.then((m) => renderMermaid(m, el))).catch((err) => {
+  const render = (el) => (el.matches(".rf-graph") ? FLOW_RENDERERS[el.dataset.kind](el) : mermaid.then((m) => renderMermaid(m, el))).catch((err) => {
     reportDiagramProblem(el.matches(".rf-graph") ? "React Flow didn't load" : "Mermaid didn't load", err);
     if (el.isConnected) showDiagramFailed(el);
   });

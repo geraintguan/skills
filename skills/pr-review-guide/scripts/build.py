@@ -21,15 +21,15 @@ Config keys:
             tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
                      inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
-            data_flow: [{title?, diagram: mermaid source | graph: Graph | machine: Machine, caption?: HTML}]
-                       how data moves through this section's change, usually a sequenceDiagram; [] opts out, a missing key warns
+            data_flow: [{title?, sequence: Sequence | graph: Graph | machine: Machine | diagram: mermaid erDiagram, caption?: HTML}]
+                       how data moves through this section's change, usually a sequence; [] opts out, a missing key warns
             state: [same flow shape, usually a machine]  the state this section adds or changes, shown in a State card
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
   overview (optional, rendered first): {
     summary: [HTML paragraphs: what the change does and why],
     before: [HTML bullets], after: [HTML bullets],
     graph: Graph for the architecture, diagram_caption: HTML,
-    data_flow: [{title?, diagram | graph | machine, caption?}]  # high-level data flow across the whole change
+    data_flow: [{title?, sequence | graph | machine | diagram, caption?}]  # high-level data flow across the whole change
     state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [HTML bullets: key design decisions and who made them]
@@ -41,7 +41,13 @@ Config keys:
     states: [{id, label, detail?, group?, status?, link?, final?}], transitions: [{from, to, event, status?}]}
   link (graph node or state): a section id, a file path in a section, or "overview"; the node jumps there
   diagrams: {name: flow}  diagrams for HTML fields; <div data-diagram="name"></div> in any HTML field draws one there
-Mermaid is only for sequenceDiagram and erDiagram: flowcharts are graphs and state diagrams are machines.
+  Sequence (call or event order, drawn with React Flow, with step-through playback): {
+    participants: [{id, label, detail?, status?, link?}],
+    steps: [message | note | fragment], where
+      message: {from, to, label, reply?: true (dashed return), status?}
+      note: {note: text, over: [one or two participant ids], status?}
+      fragment: {loop: condition, steps} | {opt: condition, steps} | {alt: [{when: condition, steps}], status?}}
+Mermaid is only for erDiagram: flowcharts are graphs, state diagrams are machines and sequence diagrams are sequences.
 The script fails if a changed file is in no group and not skipped.
 """
 import html, json, re, subprocess, sys, pathlib
@@ -82,18 +88,18 @@ def diff_lines(d):
 Flow = dict[str, Any]
 STATUSES = (None, "added", "changed", "removed")
 
-DIAGRAM_KINDS = ("diagram", "graph", "machine")
+DIAGRAM_KINDS = ("diagram", "graph", "machine", "sequence")
 FLOW_KEYS = {"title", "caption", *DIAGRAM_KINDS}
 SHAPES = (None, "decision", "terminal", "store")
-MERMAID_KINDS = ("sequenceDiagram", "erDiagram")
+MERMAID_KINDS = ("erDiagram",)
 
 def check_mermaid(where: str, source: str) -> None:
     if source.split(maxsplit=1)[:1] not in ([k] for k in MERMAID_KINDS):
-        sys.exit(f"{where}: Mermaid is only for {' and '.join(MERMAID_KINDS)}; draw anything else as a graph or a machine")
+        sys.exit(f"{where}: Mermaid is only for {' and '.join(MERMAID_KINDS)}; draw anything else as a sequence, graph or machine")
 
 def check_flow(where: str, flow: Flow) -> Flow:
     if not isinstance(flow, dict) or sum(kind in flow for kind in DIAGRAM_KINDS) != 1:
-        sys.exit(f"{where}: each flow needs exactly one of a mermaid diagram, a graph or a machine")
+        sys.exit(f"{where}: each flow needs exactly one of a sequence, a graph, a machine or a mermaid diagram")
     if flow.keys() - FLOW_KEYS:
         sys.exit(f"{where}: unknown flow keys {sorted(flow.keys() - FLOW_KEYS)}; a flow takes {sorted(FLOW_KEYS)}")
     if "diagram" in flow:
@@ -112,33 +118,35 @@ def check_link(where: str, target: str) -> str:
         sys.exit(f"{where}: link target {target!r} is not a section id, a file in a section, or 'overview'")
     return target
 
-def check_graph_nodes(where: str, nodes: list[dict[str, Any]]) -> set[str]:
-    ids = {n.get("id") for n in nodes}
-    if not nodes or len(ids) != len(nodes) or None in ids or not all(n.get("label") for n in nodes):
-        sys.exit(f"{where}: a graph needs nodes, each with a unique id and a label")
-    return ids
-
-def check_graph_edges(where: str, edges: list[dict[str, Any]], ids: set[str]) -> None:
-    for e in edges:
-        if e.get("from") not in ids or e.get("to") not in ids:
-            sys.exit(f"{where}: graph edge {e.get('from')} -> {e.get('to')} names an unknown node")
-
 def check_choice(where: str, items: list[dict[str, Any]], key: str, allowed: tuple[Optional[str], ...]) -> None:
     for item in items:
         if item.get(key) not in allowed:
-            sys.exit(f"{where}: graph {key} must be {' or '.join(filter(None, allowed))}: {item}")
+            sys.exit(f"{where}: {key} must be {' or '.join(filter(None, allowed))}: {item}")
+
+def check_nodes(where: str, nodes: list[dict[str, Any]], noun: str) -> set[str]:
+    """Checks the boxes of a graph, machine or sequence: unique ids, labels, statuses and links. Returns the ids."""
+    ids = {n.get("id") for n in nodes}
+    if not nodes or len(ids) != len(nodes) or None in ids or not all(n.get("label") for n in nodes):
+        sys.exit(f"{where}: needs {noun}s, each with a unique id and a label")
+    check_choice(where, nodes, "status", STATUSES)
+    for n in nodes:
+        if n.get("link"):
+            check_link(f"{where} {noun} {n['id']}", n["link"])
+    return ids
+
+def check_ends(where: str, items: list[dict[str, Any]], ids: set[str], noun: str) -> None:
+    for item in items:
+        if item.get("from") not in ids or item.get("to") not in ids:
+            sys.exit(f"{where}: {noun} {item.get('from')} -> {item.get('to')} names an unknown id")
 
 def check_graph(where: str, graph: dict[str, Any]) -> dict[str, Any]:
     """Validates a React Flow graph, including each node's link."""
     nodes, edges = graph.get("nodes") or [], graph.get("edges") or []
     if graph.get("direction", "TB") not in ("TB", "LR", "BT", "RL"):
         sys.exit(f"{where}: graph direction must be TB, LR, BT or RL")
-    check_graph_edges(where, edges, check_graph_nodes(where, nodes))
-    check_choice(where, nodes + edges, "status", STATUSES)
+    check_ends(where, edges, check_nodes(where, nodes, "node"), "edge")
+    check_choice(where, edges, "status", STATUSES)
     check_choice(where, nodes, "shape", SHAPES)
-    for n in nodes:
-        if n.get("link"):
-            check_link(f"{where} node {n['id']}", n["link"])
     return graph
 
 def transition_edge(where: str, t: dict[str, Any]) -> dict[str, Any]:
@@ -159,15 +167,59 @@ def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
 
 has_graph = False
 
+FRAGMENTS = ("loop", "opt")
+
+def check_message(where: str, step: dict[str, Any], ids: set[str]) -> None:
+    check_ends(where, [step], ids, "message")
+    if not step.get("label"):
+        sys.exit(f"{where}: every sequence message needs a label")
+
+def check_note(where: str, step: dict[str, Any], ids: set[str]) -> None:
+    over = step.get("over")
+    if not isinstance(over, list) or not 1 <= len(over) <= 2 or not set(over) <= ids:
+        sys.exit(f"{where}: a note goes over one or two known participants: {step}")
+
+def check_fragment(where: str, step: dict[str, Any], ids: set[str]) -> None:
+    kinds = [k for k in ("alt", *FRAGMENTS) if k in step]
+    if len(kinds) != 1:
+        sys.exit(f"{where}: a sequence step is a message, a note, or one of alt, loop or opt: {step}")
+    branches = step["alt"] if kinds == ["alt"] else [{"when": step[kinds[0]], "steps": step.get("steps")}]
+    if not isinstance(branches, list) or not branches:
+        sys.exit(f"{where}: an alt needs a list of {{when, steps}} branches: {step}")
+    for branch in branches:
+        if not branch.get("when"):
+            sys.exit(f"{where}: every {kinds[0]} needs a condition: {step}")
+        check_steps(where, branch.get("steps"), ids)
+
+def check_steps(where: str, steps: Any, ids: set[str]) -> None:
+    if not isinstance(steps, list) or not steps:
+        sys.exit(f"{where}: a sequence, and every fragment in one, needs a list of steps")
+    check_choice(where, steps, "status", STATUSES)
+    for step in steps:
+        if "from" in step:
+            check_message(where, step, ids)
+        elif "note" in step:
+            check_note(where, step, ids)
+        else:
+            check_fragment(where, step, ids)
+
+def check_sequence(where: str, seq: dict[str, Any]) -> dict[str, Any]:
+    """Validates a sequence: its participants like graph nodes, and every step against them."""
+    ids = check_nodes(where, seq.get("participants") or [], "participant")
+    check_steps(where, seq.get("steps"), ids)
+    return seq
+
 def render_diagram(where: str, spec: Flow) -> str:
-    """A React Flow placeholder for a graph or machine, else a mermaid block."""
+    """A React Flow placeholder for a sequence, graph or machine, else a mermaid block."""
     global has_graph
-    if "graph" in spec or "machine" in spec:
-        has_graph = True
-        graph = spec["graph"] if "graph" in spec else machine_graph(where, spec["machine"])
-        data = check_graph(where, graph)
-        return f'<div class="rf-graph" data-graph="{html.escape(json.dumps(data))}"></div>'
-    return f'<pre class="mermaid">{html.escape(spec["diagram"])}</pre>'
+    if "diagram" in spec:
+        return f'<pre class="mermaid">{html.escape(spec["diagram"])}</pre>'
+    has_graph = True
+    if "sequence" in spec:
+        kind, data = "sequence", check_sequence(where, spec["sequence"])
+    else:
+        kind, data = "graph", check_graph(where, spec["graph"] if "graph" in spec else machine_graph(where, spec["machine"]))
+    return f'<div class="rf-graph" data-kind="{kind}" data-spec="{html.escape(json.dumps(data))}"></div>'
 
 def render_flow(where: str, flow: Flow) -> str:
     """Title, diagram and caption of one flow, shared by the overview and the sections."""

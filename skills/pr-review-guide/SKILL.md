@@ -168,10 +168,12 @@ Never draw diagrams as ASCII art, hand-written SVG or images. There are three ki
   `changed` animate.
 - **`machine`** (React Flow too): a finite state machine as states and transitions.
   Readers step through it by clicking states or events. Use it for every state machine.
-- **[Mermaid](https://mermaid.js.org/)** source only for `sequenceDiagram` (call or
-  event order, with step-through playback) and `erDiagram` (schema changes). The
-  builder rejects Mermaid flowcharts and state diagrams: draw those as a `graph` or a
-  `machine`.
+- **`sequence`** (React Flow too): call or event order as participants and steps.
+  Steps are messages (`reply: true` for a dashed return), notes, and `loop`, `opt` and
+  `alt` fragments. Readers play it or step through it message by message. Use it for
+  every sequence diagram.
+- **[Mermaid](https://mermaid.js.org/)** source only for `erDiagram` (schema changes).
+  The builder rejects every other Mermaid kind.
 
 The overview architecture goes in `overview.graph`. For a diagram anywhere else (a file
 note, a line note, a change item), name it in the top-level `diagrams` and put
@@ -189,9 +191,10 @@ inputs, calls, events, cache and store reads and writes, responses and errors.
 - **Section `data_flow`:** zoom in on that section. Show the real function, hook or
   endpoint names, what each passes and returns, and where this PR changed the flow.
   Use `alt` for branches (success and error, cache hit and miss) and `loop` for retries
-  and polling. Mark new or changed steps, for example with `Note over X: new`. Keep the
+  and polling. Tag new or changed messages, notes and fragments with `status`, and add a
+  note such as `new: refetch, then retry once` where the change needs words. Keep the
   messages in the order they happen: the play button walks through them in source order.
-- Use `sequenceDiagram` by default. Use a `graph` with `direction: "LR"` for a
+- Use a `sequence` by default. Use a `graph` with `direction: "LR"` for a
   pipeline with no back-and-forth. When data drives state changes, model the state in
   `state` instead.
 - A section where no data moves (copy, renames, config only) sets `data_flow: []`
@@ -261,8 +264,10 @@ The builder fails on any of these:
 - a test row for a file outside its section
 - a graph node or edge that names an unknown node, or a bad status, shape or direction
 - a diagram link to something that isn't a section id, a file in a section, or `overview`
-- Mermaid other than `sequenceDiagram` or `erDiagram`, inline `<pre class="mermaid">`, an
-  unknown flow key, or a `data-diagram` name missing from `diagrams`
+- a sequence message or note that names an unknown participant, or a fragment with no
+  condition or no steps
+- Mermaid other than `erDiagram`, inline `<pre class="mermaid">`, an unknown flow key, or
+  a `data-diagram` name missing from `diagrams`
 
 Fix the config and rebuild.
 
