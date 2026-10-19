@@ -2,6 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/dockerfile.min.js"></script>
 <!-- jsDelivr's builds of React Flow and react-dom import React by three different URLs; this makes them share one copy. -->
 <script type="importmap">{"imports": {
   "https://cdn.jsdelivr.net/npm/react@%5E19.3.0/": "https://cdn.jsdelivr.net/npm/react@19.3.0/",
@@ -360,7 +361,18 @@ const reviewed = loadReviewed();
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fileId = (path) => "f-" + path.replace(/[^A-Za-z0-9]+/g, "-");
-const langFor = (path) => path.endsWith(".json") ? "json" : "typescript";
+const FILENAME_LANGS = { dockerfile: "dockerfile", makefile: "makefile", gemfile: "ruby", rakefile: "ruby" };
+const EXTENSION_LANGS = { jsonc: "json", vue: "xml", svelte: "xml" };
+
+// highlight.js registers most file extensions (py, tsx, yml, …) as language aliases.
+// Unknown files get null and render as plain text: a wrong grammar is worse than none.
+function langFor(path) {
+  const name = path.split("/").pop().toLowerCase();
+  if (FILENAME_LANGS[name]) return FILENAME_LANGS[name];
+  const ext = name.includes(".") ? name.split(".").pop() : "";
+  const lang = EXTENSION_LANGS[ext] || ext;
+  return lang && window.hljs?.getLanguage(lang) ? lang : null;
+}
 
 function splitHighlighted(html) {
   const lines = []; const stack = []; let cur = "";
@@ -379,7 +391,7 @@ function splitHighlighted(html) {
 function highlightLines(lines, lang) {
   if (!lines.length) return [];
   const text = lines.join("\n");
-  if (!window.hljs) return lines.map(esc);
+  if (!lang || !window.hljs) return lines.map(esc);
   try { return splitHighlighted(hljs.highlight(text, { language: lang, ignoreIllegals: true }).value); }
   catch { return lines.map(esc); }
 }
