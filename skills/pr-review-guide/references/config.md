@@ -5,9 +5,8 @@ inserted as-is, so escape `<` in prose as `&lt;` and wrap identifiers in `<code>
 
 A diagram is a `graph` (JSON nodes and edges, drawn with React Flow), a `machine` (an
 interactive finite state machine, also React Flow), or [Mermaid](https://mermaid.js.org/)
-source. See "Diagrams". Outside the `diagram` and
-`graph` keys, embed Mermaid in any HTML field as
-`<pre class="mermaid">flowchart LR\n  A --> B</pre>`. Escape `<` in its labels as `&lt;`.
+source for a `sequenceDiagram` or `erDiagram`. See "Diagrams". To put a diagram in an
+HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
 
 ## Top level
 
@@ -25,6 +24,7 @@ source. See "Diagrams". Outside the `diagram` and
 | `meta_extra` | no | Short HTML strings for the header meta row, such as "28 machine-translated locales left out" or "Reviews: LGTM". |
 | `usage_file` | no | Path to saved `scripts/usage.py` output, relative to the config. Leave it out: a build in a Claude Code session counts its own tokens and cost. Use it for builds outside a session, such as the example. The header shows the total tokens and estimated cost, with a per-model breakdown on hover. |
 | `skip_prefixes` | no | Changed paths left out on purpose. Name them in `meta_extra`. |
+| `diagrams` | no | `{name: flow}`, each flow `{diagram or graph or machine, title, caption}`. `<div data-diagram="name"></div>` in any HTML field draws that diagram there, such as in a file note. The builder fails on a name that isn't here and warns about one that's never used. |
 | `overview` | yes in practice | See below. |
 | `groups` | yes | The sections, in review order. See below. |
 
@@ -35,11 +35,9 @@ source. See "Diagrams". Outside the `diagram` and
 | `summary` | HTML paragraphs. The first says what the change does and why. The second says how it's built. |
 | `before`, `after` | HTML bullets. Parallel lists: each "after" bullet answers a "before" bullet. |
 | `graph` | The architecture as a graph (see "Diagrams"). Edges go from a component to what it uses. Group nodes by area, tag what the PR adds, changes or removes, and link each node to its code. Keep it under about 20 nodes. |
-| `diagram` | Mermaid source instead of `graph`, usually `flowchart TD`. Use `graph` unless you need a Mermaid-only feature. |
-| `diagram_links` | With `diagram`: `{nodeId: target}` making Mermaid nodes clickable. See "Links". |
 | `diagram_caption` | One HTML line on how to read the diagram, and which parts are generic. |
 | `state` | A list of flows `{title, machine, caption}`: the main state machines the change touches. Shown under "State". See "State machines". |
-| `data_flow` | A list of flows, each `{title, diagram or graph or machine, links, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
+| `data_flow` | A list of flows, each `{title, diagram or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
 | `decisions` | HTML bullets for design decisions. Mark the ones the user made with `<em>(your call)</em>`. |
 
@@ -56,7 +54,7 @@ source. See "Diagrams". Outside the `diagram` and
 | `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
 | `state` | A list of flows `{title, machine, caption}` for the state this section adds or changes, shown in a State card under the data flow. See "State machines". |
-| `data_flow` | A list of flows `{title, diagram or graph or machine, links, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
+| `data_flow` | A list of flows `{title, diagram or graph or machine, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
 
 ### Data flow
@@ -71,7 +69,8 @@ source. See "Diagrams". Outside the `diagram` and
 
 - Show what moves, in order: arguments, requests, events, cache or store reads and
   writes, return values and errors. The architecture diagram already covers what uses what.
-- Use `sequenceDiagram` unless a `flowchart LR` reads better for a one-way pipeline.
+- Use `sequenceDiagram` unless a `graph` with `direction: "LR"` reads better for a
+  one-way pipeline.
   Put state driven by data in `state` as a `machine`.
 - Use real names for participants and messages. Mark what this PR adds or changes,
   with `Note over X: new` or the caption.
@@ -99,20 +98,21 @@ Hovering a node dims everything it isn't connected to.
 - `direction`: `TB` (default), `LR`, `BT` or `RL`.
 - Node: `id` and `label` are required, and labels are plain text. `detail` is a second,
   smaller line, such as the file. Nodes with the same `group` are boxed together.
-  `status` is `added`, `changed` or `removed`. `link` is a link target.
+  `status` is `added`, `changed` or `removed`. `link` is a link target. `shape` is
+  `decision` (a diamond, for a branch such as `response.ok?`), `terminal` (a pill, for
+  where a flow starts or ends) or `store` (a cache, queue or database). Leave it out for
+  a plain box. Label a decision's edges with the outcomes, such as `yes` and `no`.
 - Edge: `from` and `to` are node ids. `label` is plain text. `status` colours the edge.
   `added` and `changed` edges animate unless `animated` is `false`.
 - Graphs and machines start locked: readers can pan and zoom but not move nodes until
   they press 🔒 (or L). Graphs with more than eight nodes get a minimap.
 
-**Mermaid:**
+**Mermaid** is only for `sequenceDiagram` and `erDiagram`. The builder fails on any
+other Mermaid kind (draw it as a `graph` or `machine`), on inline `<pre class="mermaid">`
+in an HTML field (use `diagrams`), and on a flow key it doesn't know.
 
 - A `sequenceDiagram` gets play, step and "show all" buttons that walk through its
   messages in order. Clicking a message jumps to it.
-- In a `flowchart` or `stateDiagram-v2`, tag nodes `:::added`, `:::changed` or
-  `:::removed`. The page defines those classes and shows a legend.
-- Animate a new path in a flowchart with an edge id: `A e1@--> B` and then
-  `e1@{ animate: true }`.
 
 ### State machines
 
@@ -152,12 +152,9 @@ Hovering a node dims everything it isn't connected to.
 ### Links
 
 A link target is a section `id`, a changed file's path, or `overview`. Clicking the node
-opens that section or file and scrolls to it. Graph nodes take `link`. Mermaid diagrams
-take `links` on the flow (or `diagram_links` on the overview), as `{nodeId: target}`,
-where `nodeId` is the id in the Mermaid source, such as `R` in `R["withRetry"]`. The
-builder fails on an unknown target or a node id that isn't in the source. Link the
-nodes a reader would want to read next. Inline `<pre class="mermaid">` blocks can't
-have links.
+opens that section or file and scrolls to it. Graph nodes and machine states take
+`link`. The builder fails on an unknown target. Link the nodes a reader would want to
+read next.
 
 ### Impact levels
 

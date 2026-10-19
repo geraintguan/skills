@@ -229,15 +229,6 @@ body.dia-lock { overflow: hidden; }
 .lib-warning ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font: 12px var(--mono); }
 .dia-failed { margin: 0; padding: 12px; border: 1px dashed var(--imp-med); border-radius: 6px; color: var(--imp-med); font-size: 13px; }
 
-/* Flowcharts: hovering a node dims everything it isn't connected to. */
-.dia svg .node, .dia svg .flowchart-link { transition: opacity .15s; }
-.dia svg.dia-focus .node:not(.dia-on):not(.dia-near), .dia svg.dia-focus .flowchart-link:not(.dia-on) { opacity: .2; }
-.dia svg .flowchart-link.dia-on { stroke: var(--accent) !important; stroke-width: 2px !important; }
-.dia svg .node.dia-on :is(rect, polygon, circle, path) { stroke-width: 2px !important; }
-.dia svg .node.dia-link { cursor: pointer; }
-.dia svg .node.dia-link :is(rect, polygon, circle, path) { stroke: var(--accent) !important; }
-.dia svg .node.dia-link .nodeLabel { text-decoration: underline dotted; text-underline-offset: 3px; }
-
 /* Sequence diagrams: stepping dims later messages and animates the current one. */
 .dia svg [data-et="message"], .dia svg .messageText { cursor: pointer; transition: opacity .2s; }
 .dia svg.seq-stepping [data-et="message"], .dia svg.seq-stepping .messageText { opacity: .12; }
@@ -258,6 +249,11 @@ body.dia-lock { overflow: hidden; }
 .rf-detail { margin-top: 2px; font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 .rf-badge { position: absolute; top: -8px; right: 6px; font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 2px 4px; border-radius: 3px; background: var(--bg); border: 1px solid currentColor; color: var(--st-fg); }
 .rf-card.final { border-width: 3px; border-style: double; }
+.rf-card.terminal { border-radius: 999px; }
+.rf-card.store { border-radius: 50% / 12px; }
+.rf-card.decision { border: 0; background: none; padding: 26px 36px; isolation: isolate; }
+.rf-shape { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; overflow: visible; }
+.rf-shape polygon { fill: var(--st-bg, var(--accent-soft)); stroke: var(--st-fg, var(--accent)); stroke-width: 1px; stroke-dasharray: var(--st-dash, none); vector-effect: non-scaling-stroke; }
 .dia .react-flow__node.current .rf-card { box-shadow: 0 0 0 2px var(--accent), 0 0 18px var(--accent-soft); }
 .dia .react-flow__edge.next .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
 .rf-badge.start { left: 6px; right: auto; color: var(--accent); }
@@ -652,23 +648,12 @@ function mermaidTheme() {
   };
 }
 
-// [foreground, background] per status; the CSS mirrors these as --st-fg and --st-bg.
-const STATUS_VARS = { added: ["--add-fg", "--add-bg"], changed: ["--imp-med", "--imp-med-bg"], removed: ["--del-fg", "--del-bg"] };
-const STATUSES = Object.keys(STATUS_VARS);
+// Edge colour per status; the CSS mirrors these as --st-fg.
+const STATUS_FG = { added: "--add-fg", changed: "--imp-med", removed: "--del-fg" };
+const STATUSES = Object.keys(STATUS_FG);
 
-// Flowcharts and state diagrams can tag nodes with :::added, :::changed or :::removed.
-function withStatusClasses(source) {
-  if (!/^\s*(flowchart|graph|stateDiagram)/.test(source)) return source;
-  const classDef = (s) => {
-    const [fg, bg] = STATUS_VARS[s].map(cssVar);
-    return `  classDef ${s} fill:${bg},stroke:${fg},color:${cssVar("--fg")}${s === "removed" ? ",stroke-dasharray:4 3" : ""}`;
-  };
-  const missing = STATUSES.filter((s) => !new RegExp(`classDef\\s+${s}\\b`).test(source));
-  return [source, ...missing.map(classDef)].join("\n");
-}
-
-function statusLegend(present) {
-  const shown = STATUSES.filter(present);
+function statusLegend(graph) {
+  const shown = STATUSES.filter((s) => graph.nodes.some((n) => n.status === s) || graph.edges.some((e) => e.status === s));
   return shown.length ? `<span class="dia-legend">${shown.map((s) => `<span class="dia-chip ${s}">${s}</span>`).join("")}</span>` : "";
 }
 
@@ -810,45 +795,6 @@ function svgPanZoom(stage, svg) {
   return { zoomBy: (f) => zoomAt(f, view.clientWidth / 2, view.clientHeight / 2), fit, panBy };
 }
 
-function flowchartNodeId(el, svgId) {
-  const prefix = `${svgId}-flowchart-`;
-  return el.id.startsWith(prefix) ? el.id.slice(prefix.length).replace(/-\d+$/, "") : null;
-}
-
-// Hovering or focusing a node highlights it, its neighbours and its edges. Linked nodes jump to their code.
-function enhanceFlowchart(svg, edges, links) {
-  const nodes = new Map();
-  for (const el of svg.querySelectorAll("g.node")) { const id = flowchartNodeId(el, svg.id); if (id) nodes.set(id, el); }
-  if (!nodes.size && svg.querySelector("g.node")) reportDiagramProblem("Flowchart hover and links are off: Mermaid's node ids changed");
-  const paths = new Map([...svg.querySelectorAll("path[data-edge]")].map((p) => [p.dataset.id, p]));
-  const focus = (id) => {
-    svg.classList.add("dia-focus");
-    nodes.get(id)?.classList.add("dia-on");
-    for (const e of edges) {
-      if (e.from !== id && e.to !== id) continue;
-      paths.get(e.id)?.classList.add("dia-on");
-      nodes.get(e.from === id ? e.to : e.from)?.classList.add("dia-near");
-    }
-  };
-  const blur = () => {
-    svg.classList.remove("dia-focus");
-    svg.querySelectorAll(".dia-on, .dia-near").forEach((el) => el.classList.remove("dia-on", "dia-near"));
-  };
-  for (const [id, el] of nodes) {
-    el.addEventListener("pointerenter", () => focus(id));
-    el.addEventListener("pointerleave", blur);
-    const target = links[id];
-    if (!target) continue;
-    el.classList.add("dia-link");
-    el.setAttribute("tabindex", "0"); el.setAttribute("role", "link");
-    el.setAttribute("aria-label", `${el.textContent.trim()}: jump to its code`);
-    el.addEventListener("click", () => jumpTo(target));
-    el.addEventListener("keydown", (event) => { if (event.key === "Enter") jumpTo(target); });
-    el.addEventListener("focus", () => focus(id));
-    el.addEventListener("blur", blur);
-  }
-}
-
 const STEP_MS = 1100;
 
 function sequenceSteps(stage, svg) {
@@ -879,34 +825,17 @@ function sequenceSteps(stage, svg) {
   return { all: () => go(-1), prev: () => go(at - 1), next: () => go(at + 1), play: toggle };
 }
 
-async function flowchartEdges(mermaid, source) {
-  const diagram = await mermaid.mermaidAPI.getDiagramFromText(source);
-  return diagram.db.getEdges().map((e) => ({ id: e.id, from: e.start, to: e.end }));
-}
-
 async function renderMermaid(mermaid, pre) {
-  const source = pre.textContent;
-  const links = JSON.parse(pre.dataset.links || "{}");
   await mermaid.run({ nodes: [pre] });
   const svg = pre.querySelector("svg");
   const kind = svg?.getAttribute("aria-roledescription");
   if (!svg || kind === "error") return;
-  const isSequence = kind === "sequence", isFlowchart = kind?.startsWith("flowchart");
-  const hints = [
-    isSequence && "▶ plays the messages in order; click one to jump to it",
-    isFlowchart && "hover a node to trace it",
-    Object.keys(links).length && "click an underlined node to open its code",
-    statusLegend((s) => svg.querySelector(`.node.${s}, g.${s}`)),
-  ].filter(Boolean);
-  const stage = createStage({ steps: isSequence, hints });
+  const isSequence = kind === "sequence";
+  const stage = createStage({ steps: isSequence, hints: isSequence ? ["▶ plays the messages in order; click one to jump to it"] : [] });
   pre.replaceWith(stage);
   const view = svgPanZoom(stage, svg);
   if (isSequence) view.steps = sequenceSteps(stage, svg);
   bindStage(stage, view);
-  if (isFlowchart) {
-    const edges = await flowchartEdges(mermaid, source).catch((err) => { reportDiagramProblem("Flowchart hover is off: Mermaid's parser API changed", err); return []; });
-    enhanceFlowchart(svg, edges, links);
-  }
 }
 
 let xyflow;
@@ -922,7 +851,8 @@ const GROUP_LABEL_H = 24;
 
 function estimatedSize(n) {
   const chars = Math.max(n.label.length, (n.detail || "").length * 0.9);
-  return { width: Math.round(Math.min(260, Math.max(120, chars * 7.4 + 32))), height: n.detail ? 54 : 38 };
+  const size = { width: Math.round(Math.min(260, Math.max(120, chars * 7.4 + 32))), height: n.detail ? 54 : 38 };
+  return n.shape === "decision" ? { width: size.width + 48, height: size.height + 36 } : size;
 }
 
 // Lays the graph out with dagre and returns React Flow nodes and edges. Groups become parent nodes.
@@ -965,7 +895,7 @@ function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
   const edges = drawn.map((e) => ({
     id: e.id, source: e.from, target: e.to, ...(isReturn(e) ? { sourceHandle: "side-out", targetHandle: "side-in" } : {}), label: e.label, type: "smoothstep",
     className: e.status || "", animated: e.animated ?? (e.status === "added" || e.status === "changed"),
-    markerEnd: { type: flow.MarkerType.ArrowClosed, color: cssVar(STATUS_VARS[e.status]?.[0] ?? "--muted") },
+    markerEnd: { type: flow.MarkerType.ArrowClosed, color: cssVar(STATUS_FG[e.status] ?? "--muted") },
   }));
   const box = g.graph();
   return { nodes: [...clusters.values(), ...nodes], edges, width: box.width, height: box.height + (groupIds.size ? GROUP_LABEL_H : 0) };
@@ -973,13 +903,16 @@ function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
 
 function graphNodeTypes({ React, flow }) {
   const h = React.createElement;
+  // The diamond's points are the box's edge midpoints, where the handles already sit.
+  const diamond = h("svg", { className: "rf-shape", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": true }, h("polygon", { points: "50,0 100,50 50,100 0,50" }));
   // In a machine a click moves to the state, so its code link gets its own button.
   const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", title: "Open its code", onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
   const card = ({ data, sourcePosition, targetPosition }) => h("div", {
-    className: ["rf-card", data.status, data.final && "final", data.link && !data.machine && "linked"].filter(Boolean).join(" "),
+    className: ["rf-card", data.status, data.shape, data.final && "final", data.link && !data.machine && "linked"].filter(Boolean).join(" "),
     title: data.link && !data.machine ? "Open its code" : undefined,
   },
     h(flow.Handle, { type: "target", position: targetPosition, isConnectable: false }),
+    data.shape === "decision" ? diamond : null,
     h("div", { className: "rf-label" }, data.label),
     data.detail ? h("div", { className: "rf-detail" }, data.detail) : null,
     data.loops.length ? h("div", { className: "rf-loops" }, `↻ ${data.loops.join(", ")}`) : null,
@@ -1090,7 +1023,7 @@ async function renderGraph(host) {
   const initial = layoutGraph(lib, graph);
   const hints = [graph.machine ? "click a state or an event to move through the machine" : "unlock 🔒 to drag nodes", "hover a node to trace it",
     graph.nodes.some((n) => n.link) && (graph.machine ? "code ↗ opens a state's code" : "click an underlined node to open its code"),
-    statusLegend((s) => graph.nodes.some((n) => n.status === s) || graph.edges.some((e) => e.status === s))].filter(Boolean);
+    statusLegend(graph)].filter(Boolean);
   const stage = createStage({ lock: true, hints });
   host.replaceWith(stage);
   const view = stage.querySelector(".dia-view");
@@ -1108,7 +1041,6 @@ async function renderGraph(host) {
 async function renderDiagrams() {
   const diagrams = [...document.querySelectorAll("pre.mermaid, .rf-graph")];
   const charts = diagrams.filter((el) => el.matches("pre.mermaid"));
-  charts.forEach((pre) => { pre.textContent = withStatusClasses(pre.textContent); });
   const mermaid = charts.length ? import(MERMAID_URL).then(({ default: m }) => {
     m.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: mermaidTheme() });
     return m;
