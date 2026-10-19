@@ -9,7 +9,8 @@ description: >-
   state machines can be clicked through event by event. Sections
   follow review order, each with its own data flow diagram and its changes listed as
   Added / Modified / Deleted with High / Medium / Low impact tags. Each changed test
-  file gets a table of the tests it changed. Diffs are syntax-highlighted, with
+  file gets a table of the tests it changed. Test and eval data fixtures, such as
+  documents and binary files, are listed with a summary but no diff. Diffs are syntax-highlighted, with
   file-level and line-level notes, a reviewed checklist, and collapsing for reviewed
   sections. Use it whenever the user asks for an artifact, page, guide or walkthrough
   to help them (or someone else) review a PR, branch, commit range or diff, even if
@@ -44,6 +45,9 @@ From top to bottom:
    - its files' diffs, with an "About this file" note and inline line notes
    - on each test file, above its diff, a Tests table, collapsed by default: change,
      test name, Unit / Integration / E2E, inputs, expected output, and why the test changed
+   - a Fixtures card, when the section's tests or evals use data files: a summary of the
+     data, then each file's change, size and what it holds. Fixtures get no diff, no line
+     notes and no reviewed box
 4. **Diagrams.** Each one sits in a stage you can drag to pan, pinch or Ctrl/⌘ + scroll
    to zoom, and open full screen. Hovering a node dims everything it isn't connected
    to. Nodes with a link jump to their section or file. Sequence diagrams have play
@@ -69,6 +73,9 @@ in the sidebar.
 - Pick out generated or bulk files: machine translations, lockfiles, snapshots and
   codegen. These go in `skip_prefixes`. Name them in `meta_extra` so the reader knows
   they were left out. Keep the source-of-truth file in, for example the base locale.
+- Pick out test and eval data fixtures: sample documents (PDF, DOCX), images, recorded
+  responses, golden outputs and eval datasets. These go in the `fixtures` of the section
+  whose tests or evals use them, not in `files`. Read enough of each to say what it holds.
 - If the repo has confidentiality rules for PRs (a CLAUDE.md or AGENTS.md), they apply
   to the page too. The page is shareable.
 
@@ -119,7 +126,8 @@ more than one idea, and the builder warns about it. Split it along the story, fo
 example "the new state" and then "the components that read it". A big consumer can
 take two sections: "how `Editor` loads drafts" and then "how `Editor` saves them".
 
-Inside a section, list source files first, then tests, then stories. A consumer's
+Inside a section, list source files first, then tests, then stories. Fixtures go in
+the section's `fixtures`, next to the tests that load them. A consumer's
 source, test, story and small call-site changes share one section. Deleted files go
 with whatever replaced them. Every changed file outside `skip_prefixes` must be in a
 section, and every hunk of a split file must be in exactly one. The builder exits
@@ -153,6 +161,10 @@ The parts, in the order to write them:
   or call order, cache and fetch behaviour, analytics meaning, and behaviour that differs
   from the base. Every line note must point at a line in the diff, or the build fails.
 - **Section `tests`.** See step 5.
+- **Section `fixtures`.** A one- or two-sentence `summary` of what the data is and which
+  tests or evals use it, then a short `note` per file on what it holds, such as "a
+  3-page contract with a redline". A directory path ending in `/` covers every changed
+  file under it. Don't describe a fixture's lines: the reader won't see them.
 
 Define library and framework terms in one clause the first time they appear, for
 example "RTK Query cache". Readers ask.
@@ -265,6 +277,8 @@ in `scripts/usage.py`.
 
 The builder fails on any of these:
 - a changed file in no section
+- a fixture path that matches no changed file, or a file listed both as a fixture and in
+  `files`, or as a fixture in two sections
 - an empty diff for a listed file
 - a line note outside the diff
 - an unknown change type, impact level or test type
