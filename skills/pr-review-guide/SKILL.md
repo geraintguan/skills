@@ -156,7 +156,7 @@ Write for a person reading the page, not for a parser. Follow the readability ru
 words, and the point first. Break anything complex into small steps the reader can
 check one at a time, with a diagram where a picture is clearer than prose.
 
-Never draw diagrams as ASCII art, hand-written SVG or images. There are three kinds:
+Never draw diagrams as ASCII art, hand-written SVG or images. There are four kinds, all drawn with React Flow:
 
 - **`graph`** ([React Flow](https://reactflow.dev/), laid out by
   [dagre](https://github.com/dagrejs/dagre)): nodes and edges as JSON. Use it for the
@@ -172,8 +172,9 @@ Never draw diagrams as ASCII art, hand-written SVG or images. There are three ki
   Steps are messages (`reply: true` for a dashed return), notes, and `loop`, `opt` and
   `alt` fragments. Readers play it or step through it message by message. Use it for
   every sequence diagram.
-- **[Mermaid](https://mermaid.js.org/)** source only for `erDiagram` (schema changes).
-  The builder rejects every other Mermaid kind.
+- **`schema`** (React Flow too): an entity-relationship diagram for schema changes.
+  Entities are cards that list their fields (with `PK`, `FK` or `UK` keys and their own
+  `status`), and relations are edges labelled with their cardinality, such as `N:1`.
 
 The overview architecture goes in `overview.graph`. For a diagram anywhere else (a file
 note, a line note, a change item), name it in the top-level `diagrams` and put
@@ -266,8 +267,9 @@ The builder fails on any of these:
 - a diagram link to something that isn't a section id, a file in a section, or `overview`
 - a sequence message or note that names an unknown participant, or a fragment with no
   condition or no steps
-- Mermaid other than `erDiagram`, inline `<pre class="mermaid">`, an unknown flow key, or
-  a `data-diagram` name missing from `diagrams`
+- a schema relation that names an unknown entity, a field with no name, or a bad key
+  or cardinality
+- an unknown flow key, or a `data-diagram` name missing from `diagrams`
 
 Fix the config and rebuild.
 
@@ -288,10 +290,9 @@ update so the URL stays the same.
 
 #### Library version drift
 
-The page loads Mermaid, React, React Flow and dagre from CDNs, pinned to exact
-versions in `assets/template.html`. Over time those builds can stop working together:
-a URL stops resolving, React Flow picks up a second copy of React, or a Mermaid release
-changes the SVG the interactive features read. The page checks for each of these. When
+The page loads React, React Flow and dagre from jsDelivr, pinned to exact versions in
+`assets/template.html`. Over time those builds can stop working together: a URL stops
+resolving, or React Flow picks up a second copy of React. The page checks for both. When
 one happens it shows a warning banner asking the reader to regenerate the guide, lists
 what failed, and logs it to the console under `diagram`. Non-interactive parts keep
 working.
@@ -299,7 +300,7 @@ working.
 When a user reports the banner, fix the template, not the one page:
 
 1. Read the banner's list or the console for which library failed.
-2. Bump the pinned URLs in `MERMAID_URL` or `XYFLOW_URLS` to versions that work
+2. Bump the pinned URLs in `XYFLOW_URLS` to versions that work
    together. When React's version changes, list the React URLs that jsDelivr's builds
    import, and point each one at the single pinned copy in the import map.
 3. Rebuild and republish the guide, and ask the user to confirm the banner is gone.
@@ -319,10 +320,10 @@ every future guide gets the change.
 - `scripts/usage.py`: totals the tokens and estimated cost of building the guide. The
   builder calls it; run it alone to inspect the numbers.
 - `assets/template.html`: the page layout, styles and behaviour, always in dark mode.
-  It loads Mermaid from cdnjs and React Flow, React and dagre from jsDelivr, only when a
-  page has diagrams of that kind.
+  It loads React Flow, React and dagre from jsDelivr, only when a page has diagrams.
 - `assets/xyflow.css`: React Flow's stylesheet. The builder inlines it only into pages
-  with a `graph`, because artifacts can't load stylesheets from a CDN.
+  with a diagram, because artifacts can't load stylesheets from a CDN.
 - `assets/example-config.json`: a made-up example that uses every key, with
-  `assets/example-usage.json` as its usage file.
+  `assets/example-usage.json` as its usage file. The demo has no database, so its one
+  missing diagram kind, `schema`, is shown in `references/config.md`.
 - `references/config.md`: the config schema and the rules for writing the content.

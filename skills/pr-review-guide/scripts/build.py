@@ -21,7 +21,7 @@ Config keys:
             tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
                      inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
-            data_flow: [{title?, sequence: Sequence | graph: Graph | machine: Machine | diagram: mermaid erDiagram, caption?: HTML}]
+            data_flow: [{title?, sequence: Sequence | graph: Graph | machine: Machine | schema: Schema, caption?: HTML}]
                        how data moves through this section's change, usually a sequence; [] opts out, a missing key warns
             state: [same flow shape, usually a machine]  the state this section adds or changes, shown in a State card
   skip_prefixes: changed paths deliberately left out (e.g. generated locales)
@@ -29,7 +29,7 @@ Config keys:
     summary: [HTML paragraphs: what the change does and why],
     before: [HTML bullets], after: [HTML bullets],
     graph: Graph for the architecture, diagram_caption: HTML,
-    data_flow: [{title?, sequence | graph | machine | diagram, caption?}]  # high-level data flow across the whole change
+    data_flow: [{title?, sequence | graph | machine | schema, caption?}]  # high-level data flow across the whole change
     state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [HTML bullets: key design decisions and who made them]
@@ -47,7 +47,10 @@ Config keys:
       message: {from, to, label, reply?: true (dashed return), status?}
       note: {note: text, over: [one or two participant ids], status?}
       fragment: {loop: condition, steps} | {opt: condition, steps} | {alt: [{when: condition, steps}], status?}}
-Mermaid is only for erDiagram: flowcharts are graphs, state diagrams are machines and sequence diagrams are sequences.
+  Schema (an entity-relationship diagram, drawn with React Flow): {direction? (default "LR"),
+    entities: [{id, label, detail?, group?, status?, link?, fields: [{name, type?, key?: "PK"|"FK"|"UK", status?}]}],
+    relations: [{from, to, label?, cardinality?: "1:1"|"1:N"|"N:1"|"N:N", status?}]}
+Every diagram is drawn with React Flow.
 The script fails if a changed file is in no group and not skipped.
 """
 import html, json, re, subprocess, sys, pathlib
@@ -88,22 +91,17 @@ def diff_lines(d):
 Flow = dict[str, Any]
 STATUSES = (None, "added", "changed", "removed")
 
-DIAGRAM_KINDS = ("diagram", "graph", "machine", "sequence")
+DIAGRAM_KINDS = ("sequence", "graph", "machine", "schema")
 FLOW_KEYS = {"title", "caption", *DIAGRAM_KINDS}
 SHAPES = (None, "decision", "terminal", "store")
-MERMAID_KINDS = ("erDiagram",)
-
-def check_mermaid(where: str, source: str) -> None:
-    if source.split(maxsplit=1)[:1] not in ([k] for k in MERMAID_KINDS):
-        sys.exit(f"{where}: Mermaid is only for {' and '.join(MERMAID_KINDS)}; draw anything else as a sequence, graph or machine")
+FIELD_KEYS = (None, "PK", "FK", "UK")
+CARDINALITIES = (None, "1:1", "1:N", "N:1", "N:N")
 
 def check_flow(where: str, flow: Flow) -> Flow:
     if not isinstance(flow, dict) or sum(kind in flow for kind in DIAGRAM_KINDS) != 1:
-        sys.exit(f"{where}: each flow needs exactly one of a sequence, a graph, a machine or a mermaid diagram")
+        sys.exit(f"{where}: each flow needs exactly one of {', '.join(DIAGRAM_KINDS)}")
     if flow.keys() - FLOW_KEYS:
         sys.exit(f"{where}: unknown flow keys {sorted(flow.keys() - FLOW_KEYS)}; a flow takes {sorted(FLOW_KEYS)}")
-    if "diagram" in flow:
-        check_mermaid(where, str(flow["diagram"]))
     return flow
 
 def check_flows(where: str, flows: list[Flow]) -> list[Flow]:
@@ -149,11 +147,13 @@ def check_graph(where: str, graph: dict[str, Any]) -> dict[str, Any]:
     check_choice(where, nodes, "shape", SHAPES)
     return graph
 
+def with_status(edge: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    return {**edge, "status": source["status"]} if "status" in source else edge
+
 def transition_edge(where: str, t: dict[str, Any]) -> dict[str, Any]:
     if not t.get("event"):
         sys.exit(f"{where}: every machine transition needs an event")
-    edge = {"from": t.get("from"), "to": t.get("to"), "label": t["event"]}
-    return {**edge, "status": t["status"]} if "status" in t else edge
+    return with_status({"from": t.get("from"), "to": t.get("to"), "label": t["event"]}, t)
 
 def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
     """A state machine as a graph: states are nodes, transitions are edges labelled with their event."""
@@ -165,7 +165,29 @@ def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
             "nodes": [{**st, "initial": st.get("id") == initial} for st in states],
             "edges": [transition_edge(where, t) for t in machine.get("transitions") or []]}
 
-has_graph = False
+def check_fields(where: str, entity: dict[str, Any]) -> None:
+    fields = entity.get("fields") or []
+    if not all(isinstance(f, dict) and f.get("name") for f in fields):
+        sys.exit(f"{where}: every field of entity {entity['id']} needs a name")
+    check_choice(where, fields, "key", FIELD_KEYS)
+    check_choice(where, fields, "status", STATUSES)
+
+def relation_edge(r: dict[str, Any]) -> dict[str, Any]:
+    label = " ".join(filter(None, (r.get("label"), r.get("cardinality"))))
+    return with_status({"from": r.get("from"), "to": r.get("to"), **({"label": label} if label else {})}, r)
+
+def schema_graph(where: str, schema: dict[str, Any]) -> dict[str, Any]:
+    """An ER diagram as a graph: entities are nodes listing their fields, relations are edges labelled with their cardinality."""
+    entities, relations = schema.get("entities") or [], schema.get("relations") or []
+    check_ends(where, relations, check_nodes(where, entities, "entity"), "relation")
+    check_choice(where, relations, "cardinality", CARDINALITIES)
+    for entity in entities:
+        check_fields(where, entity)
+    return {"direction": schema.get("direction", "LR"), "nodes": entities, "edges": [relation_edge(r) for r in relations]}
+
+GRAPH_BUILDERS = {"graph": lambda where, graph: graph, "machine": machine_graph, "schema": schema_graph}
+
+has_diagram = False
 
 FRAGMENTS = ("loop", "opt")
 
@@ -210,16 +232,15 @@ def check_sequence(where: str, seq: dict[str, Any]) -> dict[str, Any]:
     return seq
 
 def render_diagram(where: str, spec: Flow) -> str:
-    """A React Flow placeholder for a sequence, graph or machine, else a mermaid block."""
-    global has_graph
-    if "diagram" in spec:
-        return f'<pre class="mermaid">{html.escape(spec["diagram"])}</pre>'
-    has_graph = True
+    """A React Flow placeholder: a sequence, or a graph built from a graph, machine or schema."""
+    global has_diagram
+    has_diagram = True
     if "sequence" in spec:
         kind, data = "sequence", check_sequence(where, spec["sequence"])
     else:
-        kind, data = "graph", check_graph(where, spec["graph"] if "graph" in spec else machine_graph(where, spec["machine"]))
-    return f'<div class="rf-graph" data-kind="{kind}" data-spec="{html.escape(json.dumps(data))}"></div>'
+        source = next(k for k in GRAPH_BUILDERS if k in spec)
+        kind, data = "graph", check_graph(where, GRAPH_BUILDERS[source](where, spec[source]))
+    return f'<div class="rf-diagram" data-kind="{kind}" data-spec="{html.escape(json.dumps(data))}"></div>'
 
 def render_flow(where: str, flow: Flow) -> str:
     """Title, diagram and caption of one flow, shared by the overview and the sections."""
@@ -247,8 +268,6 @@ def embed_diagrams(where: str, value: Any) -> Any:
         return [embed_diagrams(where, v) for v in value]
     if not isinstance(value, str) or "<" not in value:
         return value
-    if 'class="mermaid"' in value:
-        sys.exit(f"{where}: put inline diagrams in diagrams and embed them with <div data-diagram=\"name\"></div>")
     return DIAGRAM_REF.sub(lambda m: embed_diagram(where, m), value)
 
 cfg["groups"] = [embed_diagrams(g["id"], g) for g in cfg["groups"]]
@@ -407,7 +426,7 @@ for key, value in {
     "__LEDE__": cfg["lede"], "__OVERVIEW__": overview, "__PR_URL__": cfg["pr_url"], "__STORE_KEY__": cfg["store_key"],
 }.items():
     tpl = tpl.replace(key, value)
-tpl = tpl.replace("/*__XYFLOW_CSS__*/", (assets / "xyflow.css").read_text() if has_graph else "")
+tpl = tpl.replace("/*__XYFLOW_CSS__*/", (assets / "xyflow.css").read_text() if has_diagram else "")
 tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(meta))
 out_path.write_text(tpl)
 print(f"wrote {out_path} ({len(tpl)} bytes, {sum(len(g['files']) for g in groups)} files)")
