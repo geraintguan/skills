@@ -672,25 +672,38 @@ function statusLegend(present) {
   return shown.length ? `<span class="dia-legend">${shown.map((s) => `<span class="dia-chip ${s}">${s}</span>`).join("")}</span>` : "";
 }
 
+// Keyed by the locked state: the button's symbol and what pressing it does.
+const LOCK_LABELS = { true: ["🔒", "Unlock to move nodes (L)"], false: ["🔓", "Lock nodes in place (L)"] };
+
+function showLocked(stage, locked) {
+  const btn = stage.querySelector('[data-act="lock"]');
+  const [label, title] = LOCK_LABELS[locked];
+  btn.textContent = label;
+  btn.title = title;
+  btn.setAttribute("aria-label", title);
+  btn.setAttribute("aria-pressed", String(locked));
+}
+
 const stageButton = (act, label, title) => `<button class="dia-btn" type="button" data-act="${act}" title="${title}" aria-label="${title}">${label}</button>`;
 
-function createStage({ steps = false, hints = [] }) {
+function createStage({ steps = false, lock = false, hints = [] }) {
   const stage = document.createElement("div");
   stage.className = "dia";
   stage.tabIndex = 0;
   stage.setAttribute("role", "group");
   stage.setAttribute("aria-label", "Diagram. Drag to pan, Ctrl or Command plus scroll to zoom, F for full screen.");
   const stepTools = steps ? `<span class="dia-steps">${stageButton("all", "⏮", "Show all messages (A)")}${stageButton("prev", "◀", "Previous message (P)")}${stageButton("play", "▶", "Play the messages in order")}${stageButton("next", "▶|", "Next message (N)")}<span class="dia-count"></span></span>` : "";
-  stage.innerHTML = `<div class="dia-tools">${stepTools}${stageButton("out", "−", "Zoom out (−)")}${stageButton("in", "+", "Zoom in (+)")}${stageButton("fit", "Fit", "Fit to view (0)")}${stageButton("full", "⤢", "Full screen (F)")}</div>
+  const lockTool = lock ? stageButton("lock", LOCK_LABELS.true[0], LOCK_LABELS.true[1]) : "";
+  stage.innerHTML = `<div class="dia-tools">${stepTools}${lockTool}${stageButton("out", "−", "Zoom out (−)")}${stageButton("in", "+", "Zoom in (+)")}${stageButton("fit", "Fit", "Fit to view (0)")}${stageButton("full", "⤢", "Full screen (F)")}</div>
     <div class="dia-view"><div class="dia-canvas"></div></div>
     <p class="dia-hint"><span>${["Drag to pan", "pinch or Ctrl/⌘ + scroll to zoom", ...hints].join(" · ")}</span></p>`;
   return stage;
 }
 
-const STAGE_KEYS = { "+": "in", "=": "in", "-": "out", "0": "fit", f: "full", n: "next", p: "prev", a: "all" };
+const STAGE_KEYS = { "+": "in", "=": "in", "-": "out", "0": "fit", f: "full", n: "next", p: "prev", a: "all", l: "lock" };
 const ARROWS = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
 
-// Wires the stage's buttons and keys to a view: zoomBy, fit and panBy, plus optional step actions.
+// Wires the stage's buttons and keys to a view: zoomBy, fit and panBy, plus optional toggleLock and step actions.
 function bindStage(stage, view) {
   const fullBtn = stage.querySelector('[data-act="full"]');
   const setFull = (full) => {
@@ -702,7 +715,7 @@ function bindStage(stage, view) {
     requestAnimationFrame(() => requestAnimationFrame(() => view.fit()));
     if (full) stage.focus({ preventScroll: true });
   };
-  const actions = { in: () => view.zoomBy(1.25), out: () => view.zoomBy(0.8), fit: () => view.fit(), full: () => setFull(!stage.classList.contains("full")), ...view.steps };
+  const actions = { in: () => view.zoomBy(1.25), out: () => view.zoomBy(0.8), fit: () => view.fit(), full: () => setFull(!stage.classList.contains("full")), lock: view.toggleLock, ...view.steps };
   stage.querySelector(".dia-tools").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-act]");
     if (btn) actions[btn.dataset.act]();
@@ -1018,12 +1031,14 @@ function MachinePanel({ lib, graph, current, setCurrent }) {
 
 // Lays out once from estimated sizes, then again from the sizes React Flow measures, hidden until then.
 // Scrolling over an inline graph scrolls the page; full screen hands the wheel to React Flow.
+// Nodes start locked so a stray drag pans instead of moving them.
 function GraphView({ lib, graph, initial, stage }) {
   const { React, flow } = lib, h = React.createElement;
   const nodeTypes = React.useMemo(() => graphNodeTypes(lib), []);
   const [nodes, setNodes, onNodesChange] = flow.useNodesState(initial.nodes);
   const [hover, setHover] = React.useState(null);
   const [full, setFull] = React.useState(false);
+  const [locked, setLocked] = React.useState(true);
   const [measured, setMeasured] = React.useState(false);
   const [current, setCurrent] = React.useState(graph.machine?.initial ?? null);
   const rf = flow.useReactFlow();
@@ -1033,7 +1048,9 @@ function GraphView({ lib, graph, initial, stage }) {
     fit: () => rf.fitView({ padding: 0.08, duration: 200 }),
     panBy: (dx, dy) => { const v = rf.getViewport(); rf.setViewport({ ...v, x: v.x + dx, y: v.y + dy }); },
     onMode: setFull,
+    toggleLock: () => setLocked((l) => !l),
   }), []);
+  React.useEffect(() => showLocked(stage, locked), [locked]);
   React.useEffect(() => {
     if (!initialized || measured) return;
     const sizes = new Map(rf.getNodes().filter((n) => n.type === "card" && n.measured).map((n) => [n.id, n.measured]));
@@ -1047,7 +1064,7 @@ function GraphView({ lib, graph, initial, stage }) {
   return h("div", { className: "rf-frame" }, h("div", { className: "rf-canvas" }, h(flow.ReactFlow, {
     nodes: shown.nodes, edges: shown.edges, onNodesChange, nodeTypes, colorMode: "dark", style: { opacity: measured ? 1 : 0 },
     fitView: true, fitViewOptions: { padding: 0.08 }, minZoom: 0.2, maxZoom: 2.5,
-    nodesConnectable: false, elementsSelectable: false, zoomOnScroll: full, preventScrolling: full,
+    nodesDraggable: !locked, nodesConnectable: false, elementsSelectable: false, zoomOnScroll: full, preventScrolling: full,
     onNodeMouseEnter: (_, n) => { if (n.type !== "cluster") setHover(n.id); }, onNodeMouseLeave: () => setHover(null),
     onNodeClick: (_, n) => {
       if (graph.machine) { if (n.type === "card") setCurrent(n.id); }
@@ -1071,10 +1088,10 @@ async function renderGraph(host) {
   const graph = JSON.parse(host.dataset.graph);
   const lib = await loadXyflow();
   const initial = layoutGraph(lib, graph);
-  const hints = [graph.machine ? "click a state or an event to move through the machine" : "drag nodes to rearrange", "hover a node to trace it",
+  const hints = [graph.machine ? "click a state or an event to move through the machine" : "unlock 🔒 to drag nodes", "hover a node to trace it",
     graph.nodes.some((n) => n.link) && (graph.machine ? "code ↗ opens a state's code" : "click an underlined node to open its code"),
     statusLegend((s) => graph.nodes.some((n) => n.status === s) || graph.edges.some((e) => e.status === s))].filter(Boolean);
-  const stage = createStage({ hints });
+  const stage = createStage({ lock: true, hints });
   host.replaceWith(stage);
   const view = stage.querySelector(".dia-view");
   view.classList.add("rf");

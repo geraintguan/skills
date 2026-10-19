@@ -161,8 +161,9 @@ Never draw diagrams as ASCII art, hand-written SVG or images. There are three ki
 - **`graph`** ([React Flow](https://reactflow.dev/), laid out by
   [dagre](https://github.com/dagrejs/dagre)): nodes and edges as JSON. Use it for the
   overview architecture, and for any "what uses what" picture where readers benefit from
-  dragging nodes, a minimap and click-through to code. Nodes can carry a `detail` line,
-  a `group`, a `status` and a `link`. Edges tagged `added` or `changed` animate.
+  dragging nodes (graphs start locked; the 🔒 button or L unlocks them), a minimap and
+  click-through to code. Nodes can carry a `detail` line, a `group`, a `status` and a
+  `link`. Edges tagged `added` or `changed` animate.
 - **`machine`** (React Flow too): a finite state machine as states and transitions.
   Readers step through it by clicking states or events. Use it for every state machine.
 - **[Mermaid](https://mermaid.js.org/)** source for everything else: `sequenceDiagram`

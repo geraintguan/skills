@@ -102,7 +102,8 @@ Hovering a node dims everything it isn't connected to.
   `status` is `added`, `changed` or `removed`. `link` is a link target.
 - Edge: `from` and `to` are node ids. `label` is plain text. `status` colours the edge.
   `added` and `changed` edges animate unless `animated` is `false`.
-- Readers can drag nodes. Graphs with more than eight nodes get a minimap.
+- Graphs and machines start locked: readers can pan and zoom but not move nodes until
+  they press 🔒 (or L). Graphs with more than eight nodes get a minimap.
 
 **Mermaid:**
 
