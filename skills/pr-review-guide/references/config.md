@@ -3,11 +3,11 @@
 `scripts/build.py config.json out.html` reads one JSON object. All HTML fields are
 inserted as-is, so escape `<` in prose as `&lt;` and wrap identifiers in `<code>`.
 
-A diagram is a `sequence` (participants and messages, drawn with React Flow), a `graph`
-(JSON nodes and edges, also React Flow), a `machine` (an interactive finite state
-machine, also React Flow), or [Mermaid](https://mermaid.js.org/) source for an
-`erDiagram`. See "Diagrams". To put a diagram in an
-HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
+A diagram is a `sequence` (participants and messages), a `graph` (nodes and edges), a
+`machine` (an interactive finite state machine) or a `schema` (an entity-relationship
+diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). See
+"Diagrams". To put a diagram in an HTML field, name it in `diagrams` and write
+`<div data-diagram="name"></div>`.
 
 ## Top level
 
@@ -143,9 +143,35 @@ Hovering a node dims everything it isn't connected to.
   through the messages in order. Clicking a message jumps to it. Hovering a participant
   fades the messages that don't touch it.
 
-**Mermaid** is only for `erDiagram`. The builder fails on any other Mermaid kind (draw it
-as a `sequence`, `graph` or `machine`), on inline `<pre class="mermaid">` in an HTML
-field (use `diagrams`), and on a flow key it doesn't know.
+**Schema** (React Flow, laid out by dagre like a graph), for schema and data model changes:
+
+```json
+"schema": {
+  "entities": [
+    {"id": "drafts", "label": "drafts", "detail": "migrations/0042_drafts.sql", "status": "added", "link": "migrations/0042_drafts.sql",
+     "fields": [
+       {"name": "id", "type": "uuid", "key": "PK"},
+       {"name": "author_id", "type": "uuid", "key": "FK"},
+       {"name": "body", "type": "text"},
+       {"name": "saved_at", "type": "timestamptz", "status": "added"}
+     ]},
+    {"id": "users", "label": "users", "fields": [{"name": "id", "type": "uuid", "key": "PK"}]}
+  ],
+  "relations": [{"from": "drafts", "to": "users", "label": "author_id", "cardinality": "N:1", "status": "added"}]
+}
+```
+
+- Entity: `id` and `label` are required. `detail`, `group`, `status` and `link` work as
+  on graph nodes. `fields` lists its columns in order.
+- Field: `name` is required. `type` is the column type, `key` is `PK`, `FK` or `UK`, and
+  `status` marks a column the PR adds, changes or removes.
+- Relation: `from` and `to` are entity ids, pointing from the table that holds the
+  foreign key. `label` is usually that column. `cardinality` is `1:1`, `1:N`, `N:1` or
+  `N:N`, read from `from` to `to`.
+- `direction` defaults to `LR`. Show the tables the change touches and the ones they
+  reference, not the whole database.
+
+The builder fails on a flow key it doesn't know, such as a stray `diagram` or `links`.
 
 ### State machines
 
