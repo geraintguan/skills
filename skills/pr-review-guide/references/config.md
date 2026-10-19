@@ -3,9 +3,10 @@
 `scripts/build.py config.json out.html` reads one JSON object. All HTML fields are
 inserted as-is, so escape `<` in prose as `&lt;` and wrap identifiers in `<code>`.
 
-A diagram is a `graph` (JSON nodes and edges, drawn with React Flow), a `machine` (an
-interactive finite state machine, also React Flow), or [Mermaid](https://mermaid.js.org/)
-source for a `sequenceDiagram` or `erDiagram`. See "Diagrams". To put a diagram in an
+A diagram is a `sequence` (participants and messages, drawn with React Flow), a `graph`
+(JSON nodes and edges, also React Flow), a `machine` (an interactive finite state
+machine, also React Flow), or [Mermaid](https://mermaid.js.org/) source for an
+`erDiagram`. See "Diagrams". To put a diagram in an
 HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
 
 ## Top level
@@ -37,7 +38,7 @@ HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
 | `graph` | The architecture as a graph (see "Diagrams"). Edges go from a component to what it uses. Group nodes by area, tag what the PR adds, changes or removes, and link each node to its code. Keep it under about 20 nodes. |
 | `diagram_caption` | One HTML line on how to read the diagram, and which parts are generic. |
 | `state` | A list of flows `{title, machine, caption}`: the main state machines the change touches. Shown under "State". See "State machines". |
-| `data_flow` | A list of flows, each `{title, diagram or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey. `diagram` is Mermaid, usually `sequenceDiagram`. `title` and `caption` are optional HTML. See "Data flow". |
+| `data_flow` | A list of flows, each `{title, sequence or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey, usually a `sequence`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
 | `decisions` | HTML bullets for design decisions. Mark the ones the user made with `<em>(your call)</em>`. |
 
@@ -54,7 +55,7 @@ HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
 | `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
 | `state` | A list of flows `{title, machine, caption}` for the state this section adds or changes, shown in a State card under the data flow. See "State machines". |
-| `data_flow` | A list of flows `{title, diagram or graph or machine, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
+| `data_flow` | A list of flows `{title, sequence or graph or machine, caption}` for this section only, shown under the changes. Usually one. The builder warns when the key is missing; set `[]` for a section where no data moves. See "Data flow". |
 | `note` | Legacy: a plain list used when `changes` is missing. Don't use it in new configs. |
 
 ### Data flow
@@ -62,18 +63,38 @@ HTML field, name it in `diagrams` and write `<div data-diagram="name"></div>`.
 ```json
 "data_flow": [{
   "title": "Saving a draft",
-  "diagram": "sequenceDiagram\n  participant UI as DraftEditor\n  participant H as useSaveDraft\n  participant API as POST /drafts\n  UI->>H: save(text)\n  H->>API: {id, text}\n  alt 200\n    API-->>H: draft\n    H-->>UI: saved\n  else 409\n    API-->>H: conflict\n    Note over H: new: refetch, then retry once\n  end",
+  "sequence": {
+    "participants": [
+      {"id": "ui", "label": "DraftEditor", "link": "src/DraftEditor.tsx"},
+      {"id": "hook", "label": "useSaveDraft", "status": "changed"},
+      {"id": "api", "label": "POST /drafts"}
+    ],
+    "steps": [
+      {"from": "ui", "to": "hook", "label": "save(text)"},
+      {"from": "hook", "to": "api", "label": "{id, text}"},
+      {"alt": [
+        {"when": "200", "steps": [
+          {"from": "api", "to": "hook", "label": "draft", "reply": true},
+          {"from": "hook", "to": "ui", "label": "saved", "reply": true}
+        ]},
+        {"when": "409", "steps": [
+          {"from": "api", "to": "hook", "label": "conflict", "reply": true},
+          {"note": "new: refetch, then retry once", "over": ["hook"], "status": "added"}
+        ]}
+      ]}
+    ]
+  },
   "caption": "The 409 branch is new."
 }]
 ```
 
 - Show what moves, in order: arguments, requests, events, cache or store reads and
   writes, return values and errors. The architecture diagram already covers what uses what.
-- Use `sequenceDiagram` unless a `graph` with `direction: "LR"` reads better for a
+- Use a `sequence` unless a `graph` with `direction: "LR"` reads better for a
   one-way pipeline.
   Put state driven by data in `state` as a `machine`.
-- Use real names for participants and messages. Mark what this PR adds or changes,
-  with `Note over X: new` or the caption.
+- Use real names for participants and messages. Tag what this PR adds or changes with
+  `status`, and explain it in a note or the caption.
 - The overview flow stays at the component level. A section flow zooms in on its own files.
 
 ### Diagrams
@@ -107,12 +128,24 @@ Hovering a node dims everything it isn't connected to.
 - Graphs and machines start locked: readers can pan and zoom but not move nodes until
   they press 🔒 (or L). Graphs with more than eight nodes get a minimap.
 
-**Mermaid** is only for `sequenceDiagram` and `erDiagram`. The builder fails on any
-other Mermaid kind (draw it as a `graph` or `machine`), on inline `<pre class="mermaid">`
-in an HTML field (use `diagrams`), and on a flow key it doesn't know.
+**Sequence** (React Flow, laid out in columns): see the example under "Data flow".
 
-- A `sequenceDiagram` gets play, step and "show all" buttons that walk through its
-  messages in order. Clicking a message jumps to it.
+- Participant: `id` and `label` are required. `detail`, `status` and `link` work as on
+  graph nodes. Each participant is a column, with its header repeated at the bottom.
+- `steps` run top to bottom. Each one is one of:
+  - a message: `{from, to, label}`, plus `reply: true` for a dashed return and an
+    optional `status`. `from` and `to` can be the same participant, for a self-call.
+  - a note: `{note, over}`, where `over` lists one or two participant ids.
+  - a fragment: `{loop: condition, steps}`, `{opt: condition, steps}`, or
+    `{alt: [{when, steps}, …]}` for branches. Fragments nest.
+- Fragments and notes take a `status` too.
+- The stage has play, step and "show all" buttons (and P, N and A keys) that walk
+  through the messages in order. Clicking a message jumps to it. Hovering a participant
+  fades the messages that don't touch it.
+
+**Mermaid** is only for `erDiagram`. The builder fails on any other Mermaid kind (draw it
+as a `sequence`, `graph` or `machine`), on inline `<pre class="mermaid">` in an HTML
+field (use `diagrams`), and on a flow key it doesn't know.
 
 ### State machines
 
