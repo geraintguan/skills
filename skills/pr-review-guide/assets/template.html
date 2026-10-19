@@ -126,11 +126,15 @@ details.tests-card[open] > summary::before, details.flow[open] > summary::before
 details.tests-card > summary .ttl { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg); }
 details.tests-card > summary .cnt { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .tests-scroll { overflow-x: auto; border-top: 1px solid var(--line); }
-table.tests { border-collapse: collapse; width: 100%; min-width: 980px; font-size: 13px; }
-table.tests th, table.tests td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+table.tests { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 980px; font-size: 13px; }
+table.tests th, table.tests td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 table.tests tr:last-child td { border-bottom: none; }
-table.tests th { font-weight: 600; color: var(--muted); background: var(--soft); white-space: nowrap; }
-table.tests td.tname { min-width: 220px; max-width: 300px; font-weight: 500; }
+table.tests th { position: relative; font-weight: 600; color: var(--muted); background: var(--soft); }
+table.tests td.tname { font-weight: 500; }
+table.tests .tchg, table.tests .ttype { white-space: normal; max-width: 100%; }
+.col-grip { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }
+.col-grip::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: var(--line); }
+.col-grip:hover::after, .col-grip.dragging::after { background: var(--muted); top: 0; bottom: 0; }
 .tchg, .ttype { font: 600 10px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; white-space: nowrap; display: inline-block; }
 .tchg.Added { background: var(--add-gutter); color: var(--add-fg); }
 .tchg.Modified { background: var(--hunk-bg); color: var(--hunk-fg); }
@@ -428,6 +432,8 @@ function renderDiffRows(file) {
 function splitPath(path) { const i = path.lastIndexOf("/"); return [path.slice(0, i + 1), path.slice(i + 1)]; }
 
 const TEST_CHANGES = ["Added", "Modified", "Removed"];
+const TEST_COLUMNS = [["Change", 9], ["Test", 22], ["Type", 10], ["Inputs", 22], ["Expected output", 20], ["Why", 17]];
+const MIN_COL_PX = 60;
 
 function renderTests(rows) {
   const tests = [...rows].sort((a, b) => TEST_CHANGES.indexOf(a.change) - TEST_CHANGES.indexOf(b.change));
@@ -439,9 +445,46 @@ function renderTests(rows) {
       <td class="tname">${esc(x.name)}</td>
       <td><span class="ttype">${x.type}</span></td>
       <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
+  const cols = TEST_COLUMNS.map(([, pct]) => `<col style="width:${pct}%">`).join("");
+  const heads = TEST_COLUMNS.map(([label]) => `<th>${label}<span class="col-grip" role="separator" aria-orientation="vertical" aria-label="Resize ${label} column"></span></th>`).join("");
   return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
-    <div class="tests-scroll"><table class="tests"><thead><tr><th>Change</th><th>Test</th><th>Type</th><th>Inputs</th><th>Expected output</th><th>Why</th></tr></thead>
+    <div class="tests-scroll"><table class="tests"><colgroup>${cols}</colgroup><thead><tr>${heads}</tr></thead>
     <tbody>${body}</tbody></table></div></details>`;
+}
+
+// The first drag pins every column to its rendered pixel width, so widening one column
+// grows the table (scrolling sideways) instead of squeezing the others.
+function pinColumnWidths(table) {
+  const cols = [...table.querySelectorAll("col")];
+  const widths = [...table.querySelectorAll("thead th")].map((th) => th.getBoundingClientRect().width);
+  cols.forEach((col, i) => { col.style.width = `${widths[i]}px`; });
+  table.style.minWidth = "0";
+  table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
+  return cols;
+}
+
+function startColumnResize(event, grip) {
+  event.preventDefault();
+  const table = grip.closest("table");
+  const cols = pinColumnWidths(table);
+  const col = cols[grip.parentElement.cellIndex];
+  const startX = event.clientX, startCol = parseFloat(col.style.width), startTable = parseFloat(table.style.width);
+  grip.classList.add("dragging");
+  grip.setPointerCapture(event.pointerId);
+  const onMove = (e) => {
+    const width = Math.max(MIN_COL_PX, startCol + e.clientX - startX);
+    col.style.width = `${width}px`;
+    table.style.width = `${startTable + width - startCol}px`;
+  };
+  const onUp = () => {
+    grip.classList.remove("dragging");
+    grip.removeEventListener("pointermove", onMove);
+    grip.removeEventListener("pointerup", onUp);
+    grip.removeEventListener("pointercancel", onUp);
+  };
+  grip.addEventListener("pointermove", onMove);
+  grip.addEventListener("pointerup", onUp);
+  grip.addEventListener("pointercancel", onUp);
 }
 
 function fileCard(file) {
@@ -603,6 +646,10 @@ function bindToolbar() {
   };
   document.getElementById("expand-all").onclick = () => setAll(false);
   document.getElementById("collapse-all").onclick = () => setAll(true);
+  document.getElementById("main").addEventListener("pointerdown", (event) => {
+    const grip = event.target.closest(".col-grip");
+    if (grip) startColumnResize(event, grip);
+  });
   document.getElementById("main").addEventListener("click", (event) => {
     const chev = event.target.closest(".sec-chev");
     if (chev) { const s = chev.closest("section.group"); setSectionCollapsed(s, !s.classList.contains("collapsed")); }
