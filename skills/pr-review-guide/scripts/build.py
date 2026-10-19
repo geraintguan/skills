@@ -10,8 +10,10 @@ Config keys:
   meta_extra: list of short HTML strings for the header meta row
   usage_file: path to scripts/usage.py output (relative to the config). Without it, a build inside a
               Claude Code session counts the session's tokens and cost itself. Shown in the meta row.
-  groups: [{id, title, files: [path | {path, note?, lines?}],
+  groups: [{id, title, files: [path | {path, note?, lines?, hunks?}],
             file note: HTML narrating what the file's change does and why (shown above its diff)
+            hunks: [1-based hunk numbers of `git diff -U4`] shows only those hunks; a file split across sections
+                   lists it in each, and together the entries must cover every hunk exactly once
             lines: [{line, side: "new"|"old" (default new), text: HTML, impact?}] inline notes after that line;
                    the line must appear in the diff (an added/context line for new, removed/context for old)
             bridge: HTML sentence linking this section to the one before it (the story's next step),
@@ -53,7 +55,7 @@ Config keys:
 Every diagram is drawn with React Flow.
 The script fails if a changed file is in no group and not skipped.
 """
-import html, json, re, subprocess, sys, pathlib
+import functools, html, json, re, subprocess, sys, pathlib
 from collections import defaultdict
 from typing import Any, Optional
 
@@ -61,11 +63,17 @@ import usage
 
 cfg_path = pathlib.Path(sys.argv[1])
 cfg = json.loads(cfg_path.read_text())
+for g in cfg["groups"]:
+    g["files"] = [{"path": e} if isinstance(e, str) else e for e in g["files"]]
 out_path = pathlib.Path(sys.argv[2])
 root, base, head = cfg.get("repo_root", "."), cfg["base"], cfg.get("head", "HEAD")
 
 def git(*args):
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
+
+@functools.cache
+def file_diff(path: str) -> str:
+    return git("diff", "-U4", base, head, "--", path)
 
 def load_relative_json(path: str) -> Any:
     return json.loads((cfg_path.parent / path).read_text())
@@ -109,7 +117,7 @@ def check_flows(where: str, flows: list[Flow]) -> list[Flow]:
 
 # Diagram links name a section id, a file path in a section, or "overview"; the page turns them into anchors.
 link_targets = {"overview", *(g["id"] for g in cfg["groups"]),
-                *(e if isinstance(e, str) else e["path"] for g in cfg["groups"] for e in g["files"])}
+                *(e["path"] for g in cfg["groups"] for e in g["files"])}
 
 def check_link(where: str, target: str) -> str:
     if target not in link_targets:
@@ -289,24 +297,66 @@ def check_line_notes(path, d, notes):
 # Past either size a section usually covers more than one idea, which is hard to review in one sitting.
 SECTION_MAX_FILES, SECTION_MAX_LINES = 8, 400
 
-groups, seen = [], set()
+def split_hunks(d: str) -> tuple[str, list[str]]:
+    """The file header and each hunk of a one-file diff."""
+    header, *hunks = re.split(r"^(?=@@)", d, flags=re.M)
+    return header, hunks
+
+def check_hunk_numbers(path: str, hunks: list[str], picked: list[int]) -> None:
+    bad = [n for n in picked if not isinstance(n, int) or not 1 <= n <= len(hunks)]
+    if bad or not picked:
+        listing = "\n  ".join(f"{i}: {h.splitlines()[0]}" for i, h in enumerate(hunks, 1))
+        sys.exit(f"{path}: hunks must be numbers from 1 to {len(hunks)}, got {bad or picked}. Its hunks:\n  {listing}")
+
+Entries = list[tuple[str, dict[str, Any]]]
+
+def check_hunk_coverage(path: str, entries: Entries) -> None:
+    hunks = split_hunks(file_diff(path))[1]
+    for _, spec in entries:
+        check_hunk_numbers(path, hunks, spec["hunks"])
+    picked = sorted(n for _, spec in entries for n in spec["hunks"])
+    if picked != list(range(1, len(hunks) + 1)):
+        sys.exit(f"{path}: its entries must cover hunks 1 to {len(hunks)} once each, got {picked}")
+
+def check_split_files(entries_by_path: dict[str, Entries]) -> None:
+    """A file listed in more than one section must share out its hunks, each to exactly one section."""
+    for path, entries in entries_by_path.items():
+        group_ids = [group_id for group_id, _ in entries]
+        if len(set(group_ids)) != len(group_ids):
+            sys.exit(f"{path}: listed twice in one section; give that entry all the hunks it needs")
+        if len(entries) == 1 and "hunks" not in entries[0][1]:
+            continue
+        if any("hunks" not in spec for _, spec in entries):
+            sys.exit(f"{path}: is split across sections {group_ids}, so every entry for it needs hunks")
+        check_hunk_coverage(path, entries)
+
+entries_by_path: dict[str, Entries] = defaultdict(list)
+for g in cfg["groups"]:
+    for spec in g["files"]:
+        entries_by_path[spec["path"]].append((g["id"], spec))
+        spec["part"] = len(entries_by_path[spec["path"]])
+check_split_files(entries_by_path)
+
+groups = []
 for g in cfg["groups"]:
     files = []
-    for entry in g["files"]:
-        spec = {"path": entry} if isinstance(entry, str) else entry
-        f = spec["path"]
-        d = git("diff", "-U4", base, head, "--", f)
+    for spec in g["files"]:
+        f, part = spec["path"], spec["part"]
+        d = file_diff(f)
         if not d:
             sys.exit(f"no diff for {f}")
-        seen.add(f)
-        header = d[:400]
+        header, hunks = split_hunks(d)
+        if "hunks" in spec:
+            hunks = [hunks[n - 1] for n in sorted(spec["hunks"])]
+        d = header + "".join(hunks)
         status = "A" if "\nnew file mode" in header else "D" if "\ndeleted file mode" in header else "M"
         lines = d.splitlines()
         files.append(dict(
-            path=f, status=status,
+            path=f, key=f if part == 1 else f"{f}#{part}", part=part, parts=len(entries_by_path[f]),
+            status=status,
             add=sum(l.startswith("+") and not l.startswith("+++") for l in lines),
             rem=sum(l.startswith("-") and not l.startswith("---") for l in lines),
-            diff=d[d.index("\n@@") + 1:] if "\n@@" in d else "",
+            diff="".join(hunks),
             test=".test." in f or "/tests/" in f or "/test_" in f,
             story=".stories." in f,
             note=spec.get("note"),
@@ -347,7 +397,7 @@ for g in cfg["groups"]:
                    "state": "".join(f"<div>{render_flow(g['id'], f)}</div>" for f in machines)})
 
 skips = tuple(cfg.get("skip_prefixes", []))
-missing = [f for f in git("diff", "--name-only", base, head).split() if f not in seen and not f.startswith(skips)]
+missing = [f for f in git("diff", "--name-only", base, head).split() if f not in entries_by_path and not f.startswith(skips)]
 if missing:
     sys.exit("changed files in no group:\n  " + "\n  ".join(missing))
 

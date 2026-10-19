@@ -51,7 +51,7 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 | `bridge` | One HTML sentence linking this section to the one before it: what the reader now knows, and what this section adds. The first section's bridge says why the story starts here. Shown under the title, even when the section is collapsed. The builder warns when it's missing after the first section. |
 | `lead` | One sentence saying where to start reading. |
 | `changes` | `{added, modified, deleted}`. Each holds a list of `{impact, text}`. Leave out a type with no entries. |
-| `files` | Paths, or `{path, note, lines}` objects, ordered source → tests → stories. |
+| `files` | Paths, or `{path, note, lines, hunks}` objects, ordered source → tests → stories. `hunks` splits a file across sections (see "Splitting a file"). |
 | `tests` | Test rows, each shown on its file's card. See below. |
 | `tests_file` | Path to a JSON array of test rows, relative to the config. It's merged into `tests`. |
 | `state` | A list of flows `{title, machine, caption}` for the state this section adds or changes, shown in a State card under the data flow. See "State machines". |
@@ -247,6 +247,25 @@ table.
 - Don't narrate every file. Every source file gets a `note`. Tests and stories get one
   when the note says what the tests cover.
 
+### Splitting a file
+
+When one file holds changes that belong to different steps of the story, list it in
+each of those sections with the `hunks` that belong there. For example, `client.ts`
+adds a helper in hunk 1 and adopts it in hunks 2 and 3:
+
+```json
+{"id": "helper", "files": [{"path": "src/client.ts", "hunks": [1], "note": "The new helper."}]},
+{"id": "adopt", "files": [{"path": "src/client.ts", "hunks": [2, 3], "note": "Each call now uses it."}]}
+```
+
+- Hunks are numbered from 1 in the order of `git diff -U4 <base> <head> -- <path>`.
+  Count its `@@` lines. A wrong number makes the builder exit and list the file's hunks.
+- Between them, a file's entries must cover every hunk exactly once, and a section lists
+  a file only once.
+- Each part has its own card, reviewed checkbox, `note` and `lines`, and shows "Part 1 of
+  2". A link to the path goes to the first part.
+- Split only when it helps the story. A file whose changes are one idea stays whole.
+
 ### Test rows
 
 ```json
@@ -286,6 +305,8 @@ table.
   section needs it first, move that section.
 - Keep each section to one idea. Split a section that needs "and" in its title, or that
   goes past about 8 files or 400 changed lines.
+- Split a file across sections when its changes belong to different steps of the story.
+  See "Splitting a file".
 - Say what's surprising or risky at the point the reader meets it, not in a list at the
   end.
 

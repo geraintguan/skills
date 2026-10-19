@@ -447,7 +447,7 @@ function renderTests(rows) {
 function fileCard(file) {
   const [dir, base] = splitPath(file.path);
   const el = document.createElement("article");
-  el.className = "file"; el.id = fileId(file.path);
+  el.className = "file"; el.id = fileId(file.key);
   if (file.test || file.story) el.dataset.secondary = "1";
   const statusLabel = { A: "Added", D: "Deleted", M: "Modified" }[file.status];
   const kind = file.test ? '<span class="pill kind">Test</span>' : file.story ? '<span class="pill kind">Story</span>' : "";
@@ -456,6 +456,7 @@ function fileCard(file) {
       <button class="chev" type="button" aria-label="Toggle ${esc(base)}" aria-expanded="true">▾</button>
       <span class="pill ${file.status}">${statusLabel}</span>${kind}
       <span class="fpath"><span class="dir">${esc(dir)}</span>${esc(base)}</span>
+      ${file.parts > 1 ? `<span class="pill kind">Part ${file.part} of ${file.parts}</span>` : ""}
       <span class="fstat"><span class="plus">+${file.add}</span> <span class="minus">−${file.rem}</span></span>
       ${(file.lines || []).length ? `<span class="note-count">${file.lines.length} line note${file.lines.length === 1 ? "" : "s"}</span>` : ""}
       <a class="fstat" href="${PR_URL}/files" target="_blank" rel="noopener">GitHub ↗</a>
@@ -478,11 +479,11 @@ function fileCard(file) {
     } else body.innerHTML = preamble + table(rows);
   }
   const box = el.querySelector("input");
-  box.checked = reviewed.has(file.path);
+  box.checked = reviewed.has(file.key);
   el.classList.toggle("done", box.checked);
   if (box.checked) setCollapsed(el, true);
   box.addEventListener("change", () => {
-    box.checked ? reviewed.add(file.path) : reviewed.delete(file.path);
+    box.checked ? reviewed.add(file.key) : reviewed.delete(file.key);
     saveReviewed(reviewed); el.classList.toggle("done", box.checked);
     setCollapsed(el, box.checked);
     refresh();
@@ -524,7 +525,7 @@ function renderToc() {
     <div class="toc-group" data-group="${g.id}">
       <div class="toc-head"><button class="toc-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)} files">▾</button><a href="#${g.id}"><span class="n">${i + 1}</span>${esc(g.title)}</a></div>
       <ul>${g.files.map((f) => `
-        <li data-path="${esc(f.path)}" ${f.test || f.story ? 'data-secondary="1"' : ""}><a href="#${fileId(f.path)}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat"><span class="plus">+${f.add}</span> <span class="minus">−${f.rem}</span></span></a></li>`).join("")}
+        <li data-key="${esc(f.key)}" ${f.test || f.story ? 'data-secondary="1"' : ""}><a href="#${fileId(f.key)}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat"><span class="plus">+${f.add}</span> <span class="minus">−${f.rem}</span></span></a></li>`).join("")}
       </ul>
     </div>`).join("");
 }
@@ -567,16 +568,16 @@ function renderMain() {
 
 function refresh() {
   const visible = allFiles.filter((f) => !(hideSecondary && (f.test || f.story)));
-  const done = visible.filter((f) => reviewed.has(f.path)).length;
+  const done = visible.filter((f) => reviewed.has(f.key)).length;
   document.getElementById("progress").textContent = `${done} of ${visible.length} reviewed`;
   document.getElementById("barfill").style.width = visible.length ? `${(100 * done) / visible.length}%` : "0";
   document.querySelectorAll("#toc li").forEach((li) => {
-    li.classList.toggle("done", reviewed.has(li.dataset.path));
+    li.classList.toggle("done", reviewed.has(li.dataset.key));
     li.hidden = hideSecondary && li.dataset.secondary === "1";
   });
   document.querySelectorAll(".file").forEach((el) => el.classList.toggle("hidden-kind", hideSecondary && el.dataset.secondary === "1"));
   for (const g of GROUPS) {
-    const complete = g.files.length > 0 && g.files.every((f) => reviewed.has(f.path));
+    const complete = g.files.length > 0 && g.files.every((f) => reviewed.has(f.key));
     const section = document.getElementById(g.id);
     section?.classList.toggle("done", complete);
     const wasComplete = sectionComplete.get(g.id) === true;

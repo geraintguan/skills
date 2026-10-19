@@ -106,7 +106,12 @@ section knowing why the next one comes next.
    For example: "With `withRetry` in place, the client can lean on it. The one real
    change is deciding what counts as a failure." The first section's bridge says why
    the story starts there. The builder warns when a bridge is missing.
-5. **Read the section titles and bridges in order, alone.** They should tell the whole
+5. **Split a file when its changes belong to different steps.** A file can hold more
+   than one idea, such as a new helper and a call site that adopts it. Give each idea
+   its own section and list the file in each with the `hunks` that belong there,
+   instead of showing the whole file in one section the reader isn't ready for. Only
+   split when it makes the story easier to follow; most files stay whole.
+6. **Read the section titles and bridges in order, alone.** They should tell the whole
    story without the diffs. If one jumps or repeats, reorder, merge or split.
 
 Keep sections small. A section past about 8 files or 400 changed lines usually holds
@@ -117,7 +122,8 @@ take two sections: "how `Editor` loads drafts" and then "how `Editor` saves them
 Inside a section, list source files first, then tests, then stories. A consumer's
 source, test, story and small call-site changes share one section. Deleted files go
 with whatever replaced them. Every changed file outside `skip_prefixes` must be in a
-section. The builder exits with an error if one is missing.
+section, and every hunk of a split file must be in exactly one. The builder exits
+with an error if one is missing.
 
 ### 4. Write the config
 
