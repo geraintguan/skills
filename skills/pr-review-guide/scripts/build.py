@@ -36,7 +36,7 @@ Config keys:
     data_flow: [{title?, sequence | graph | machine | schema, caption?}]  # high-level data flow across the whole change
     state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
-    decisions: [{impact: "High"|"Medium"|"Low", text: HTML}]  # key design decisions, shown grouped by impact
+    decisions: [{area, impact: "High"|"Medium"|"Low", text: HTML}]  # key design decisions, grouped by area, then impact
     api: [{name, method, protocol, change: "Added"|"Modified"|"Removed", does: HTML, why: HTML, file?}]
          # every API endpoint the PR touches; [] shows "No API changes", a missing key warns
     metrics: [{name, change, where, tracks: HTML, why: HTML, file?}]
@@ -383,11 +383,14 @@ OVERVIEW_TABLES = {
                   columns=[("gates", "What it gates"), ("why", "Why"), ("default", "Default")]),
 }
 
+def is_decision(d: Any) -> bool:
+    return isinstance(d, dict) and bool(d.get("text")) and isinstance(d.get("area"), str) and bool(d["area"].strip())
+
 def check_overview(ov: dict[str, Any]) -> None:
     check_lists("overview", ov, OVERVIEW_LISTS)
     decisions = ov.get("decisions", [])
-    if not isinstance(decisions, list) or not all(isinstance(d, dict) and d.get("text") for d in decisions):
-        sys.exit("overview.decisions must be a list of {impact, text}")
+    if not isinstance(decisions, list) or not all(map(is_decision, decisions)):
+        sys.exit("overview.decisions must be a list of {area, impact, text}")
     check_choice("overview.decisions", decisions, "impact", IMPACTS)
     for key, table in OVERVIEW_TABLES.items():
         if key not in ov:
@@ -609,15 +612,30 @@ def render_layout(layout: list[dict[str, Any]]) -> str:
         for r in layout)
     return grid_table(["Where", "What it does in this PR", "Lines"], rows)
 
-def render_decisions(decisions: list[dict[str, Any]]) -> str:
-    """Decisions grouped under their impact level, highest first."""
+def decisions_by_area(decisions: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Decisions keyed by area. Areas with higher-impact decisions come first, then in config order."""
+    areas: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for d in decisions:
+        areas[d["area"]].append(d)
+    def top_impact(area: str) -> int:
+        return min(IMPACTS.index(d["impact"]) for d in areas[area])
+    return {area: areas[area] for area in sorted(areas, key=top_impact)}
+
+def render_impact_levels(decisions: list[dict[str, Any]]) -> str:
+    """One area's decisions under their impact level, highest first."""
     blocks = []
     for level in IMPACTS:
         items = [d["text"] for d in decisions if d["impact"] == level]
         if items:
-            blocks.append(f'<div class="ov-dec-level"><h4><span class="imp {level.lower()}">{level}</span>'
-                          f'<span class="count">{len(items)}</span></h4><ul class="ov-decisions">{bullets(items)}</ul></div>')
+            blocks.append(f'<div class="ov-dec-level"><h5><span class="imp {level.lower()}">{level}</span>'
+                          f'<span class="count">{len(items)}</span></h5><ul class="ov-decisions">{bullets(items)}</ul></div>')
     return "".join(blocks)
+
+def render_decisions(decisions: list[dict[str, Any]]) -> str:
+    """Decisions grouped by the area they touch, then by impact within each area."""
+    return "".join(
+        f'<div class="ov-dec-area"><h4>{html.escape(area)}<span class="count">{len(items)}</span></h4>{render_impact_levels(items)}</div>'
+        for area, items in decisions_by_area(decisions).items())
 
 def name_cell(row: dict[str, Any]) -> str:
     """The row's name, linked to the file that defines it when there is one."""

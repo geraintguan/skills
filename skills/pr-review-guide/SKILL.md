@@ -4,7 +4,7 @@ description: >-
   Builds an interactive review guide for a pull request or branch diff and publishes
   it as an artifact. The guide has a high-level overview (summary, before/after,
   an interactive architecture graph, data flow diagrams, interactive state machines,
-  code layout, key decisions by impact, API endpoints, metrics and feature flags). Every diagram can be panned, zoomed and opened full screen;
+  code layout, key decisions by area and impact, API endpoints, metrics and feature flags). Every diagram can be panned, zoomed and opened full screen;
   nodes link to their code, sequence diagrams play their messages step by step, and
   state machines can be clicked through event by event. Sections
   follow review order, each with its own data flow diagram and its changes listed as
@@ -34,7 +34,7 @@ From top to bottom:
    the guide, and legends for impact levels and test types.
 2. **Overview.** Summary, before/after cards, an interactive architecture graph, the
    high-level data flow across the whole change, the main state machines it touches, a
-   code-layout table, key decisions grouped by impact, an API table, a Metrics table and
+   code-layout table, key decisions grouped by area and then impact, an API table, a Metrics table and
    a Feature flags table. Each part has its own entry under Overview in the sidebar.
 3. **Sections, in review order.** Each section has:
    - a caret, plus counts per impact level
@@ -158,8 +158,8 @@ The parts, in the order to write them:
   adds, changes or removes, group nodes by area, and link each node to its section or
   file. The data flow shows how data moves across
   the whole change (see below). The layout table has the paths and what each does in
-  this PR. Decisions each get a High, Medium or Low impact and mark the ones the user
-  made.
+  this PR. Decisions each name the area they touch and get a High, Medium or Low
+  impact, and mark the ones the user made.
 - **Overview `api`.** One row per API endpoint the PR adds, modifies or removes, with its
   HTTP method, protocol (REST, tRPC, GraphQL, gRPC, ...), what it does and why it changed.
   Set `[]` when there are none, so the page says so; the builder warns when the key is
@@ -312,7 +312,7 @@ The builder fails on any of these:
   `files`, or as a fixture in two sections
 - a single string where a list belongs: the overview's `summary`, `before` or `after`,
   or `meta_extra` or `skip_prefixes`
-- a decision with no text or impact, or an API, metric or flag row with a missing or unknown
+- a decision with no area, text or impact, or an API, metric or flag row with a missing or unknown
   key, an unknown change, or a `file` that isn't a link target
 - an empty diff for a listed file
 - a line note outside the diff
