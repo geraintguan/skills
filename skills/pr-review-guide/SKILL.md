@@ -49,8 +49,8 @@ From top to bottom:
      data, then each file's change, size and what it holds. Fixtures get no diff, no line
      notes and no reviewed box
 4. **Diagrams.** Each one sits in a stage you can drag to pan, pinch or Ctrl/⌘ + scroll
-   to zoom, and open full screen. Hovering a node dims everything it isn't connected
-   to. Nodes with a link jump to their section or file. Sequence diagrams have play
+   to zoom, and open full screen. Hovering any part shows a tooltip saying what it is
+   and what it does, and hovering a node also dims everything it isn't connected to. Nodes with a link jump to their section or file. Sequence diagrams have play
    and step buttons that walk through the messages in order. Graph edges can be
    animated, and nodes tagged added, changed or removed get matching colours. State
    machines start in their initial state; clicking a state or one of its events moves
@@ -194,6 +194,14 @@ Never draw diagrams as ASCII art, hand-written SVG or images. There are four kin
   Entities are cards that list their fields (with `PK`, `FK` or `UK` keys and their own
   `status`), and relations are edges labelled with their cardinality, such as `N:1`.
 
+Give every diagram element a `tip`: one or two plain-text sentences, shown on hover,
+saying what the element is and what it does in this change. That covers nodes, states,
+participants and entities, plus edges, transitions, relations, messages, loops, opts
+and each alt branch. Groups take theirs in `group_tips`. For a sequence participant,
+say who the actor is and what it does in the flow, such as "Builds the request and
+hands it to withRetry". For an arrow, say what moves along it and why. Say what's new
+when the element's `status` is set. The builder warns about each element with no tip.
+
 The overview architecture goes in `overview.graph`. For a diagram anywhere else (a file
 note, a line note, a change item), name it in the top-level `diagrams` and put
 `<div data-diagram="name"></div>` in the HTML where it goes. The page themes every
@@ -292,6 +300,7 @@ The builder fails on any of these:
 - a schema relation that names an unknown entity, a field with no name, or a bad key
   or cardinality
 - an unknown flow key, or a `data-diagram` name missing from `diagrams`
+- an empty or non-string `tip`, or a `group_tips` name no node is in
 
 Fix the config and rebuild.
 

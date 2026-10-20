@@ -39,21 +39,22 @@ Config keys:
     decisions: [HTML bullets: key design decisions and who made them]
   }
   Graph (rendered with React Flow): {direction?: "TB"|"LR"|"BT"|"RL",
-    nodes: [{id, label, detail?, group?, status?: "added"|"changed"|"removed", shape?: "decision"|"terminal"|"store", link?}],
-    edges: [{from, to, label?, status?, animated?}]}
+    nodes: [{id, label, detail?, group?, status?: "added"|"changed"|"removed", shape?: "decision"|"terminal"|"store", link?, tip?}],
+    edges: [{from, to, label?, status?, animated?, tip?}], group_tips?: {group: text}}
   Machine (an interactive finite state machine, drawn with React Flow): {direction?, initial?: state id (default the first),
-    states: [{id, label, detail?, group?, status?, link?, final?}], transitions: [{from, to, event, status?}]}
+    states: [{id, label, detail?, group?, status?, link?, final?, tip?}], transitions: [{from, to, event, status?, tip?}], group_tips?}
   link (graph node or state): a section id, a file path in a section, or "overview"; the node jumps there
+  tip (any diagram element): plain text, shown as written on hover, saying what the element is and does; a diagram element without one warns
   diagrams: {name: flow}  diagrams for HTML fields; <div data-diagram="name"></div> in any HTML field draws one there
   Sequence (call or event order, drawn with React Flow, with step-through playback): {
-    participants: [{id, label, detail?, status?, link?}],
+    participants: [{id, label, detail?, status?, link?, tip?}],
     steps: [message | note | fragment], where
-      message: {from, to, label, reply?: true (dashed return), status?}
-      note: {note: text, over: [one or two participant ids], status?}
-      fragment: {loop: condition, steps} | {opt: condition, steps} | {alt: [{when: condition, steps}], status?}}
+      message: {from, to, label, reply?: true (dashed return), status?, tip?}
+      note: {note: text, over: [one or two participant ids], status?, tip?}
+      fragment: {loop: condition, steps} | {opt: condition, steps} | {alt: [{when: condition, steps, tip?}], status?, tip?}}
   Schema (an entity-relationship diagram, drawn with React Flow): {direction? (default "LR"),
-    entities: [{id, label, detail?, group?, status?, link?, fields: [{name, type?, key?: "PK"|"FK"|"UK", status?}]}],
-    relations: [{from, to, label?, cardinality?: "1:1"|"1:N"|"N:1"|"N:N", status?}]}
+    entities: [{id, label, detail?, group?, status?, link?, tip?, fields: [{name, type?, key?: "PK"|"FK"|"UK", status?, tip?}]}],
+    relations: [{from, to, label?, cardinality?: "1:1"|"1:N"|"N:1"|"N:N", status?, tip?}], group_tips?}
 Every diagram is drawn with React Flow.
 The script fails if a changed file is in no group and not skipped.
 """
@@ -155,15 +156,18 @@ def check_graph(where: str, graph: dict[str, Any]) -> dict[str, Any]:
     check_ends(where, edges, check_nodes(where, nodes, "node"), "edge")
     check_choice(where, edges, "status", STATUSES)
     check_choice(where, nodes, "shape", SHAPES)
+    unknown = (graph.get("group_tips") or {}).keys() - {n.get("group") for n in nodes}
+    if unknown:
+        sys.exit(f"{where}: group_tips names groups no node is in: {sorted(unknown)}")
     return graph
 
-def with_status(edge: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
-    return {**edge, "status": source["status"]} if "status" in source else edge
+def with_display(edge: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    return {**edge, **{k: source[k] for k in ("status", "tip") if k in source}}
 
 def transition_edge(where: str, t: dict[str, Any]) -> dict[str, Any]:
     if not t.get("event"):
         sys.exit(f"{where}: every machine transition needs an event")
-    return with_status({"from": t.get("from"), "to": t.get("to"), "label": t["event"]}, t)
+    return with_display({"from": t.get("from"), "to": t.get("to"), "label": t["event"]}, t)
 
 def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
     """A state machine as a graph: states are nodes, transitions are edges labelled with their event."""
@@ -171,9 +175,12 @@ def machine_graph(where: str, machine: dict[str, Any]) -> dict[str, Any]:
     initial = machine.get("initial") or states[0].get("id")
     if initial not in {st.get("id") for st in states}:
         sys.exit(f"{where}: machine initial state {initial!r} is not one of its states")
-    return {"direction": machine.get("direction", "LR"), "machine": {"initial": initial},
+    return {"direction": machine.get("direction", "LR"), "machine": {"initial": initial}, **group_tips(machine),
             "nodes": [{**st, "initial": st.get("id") == initial} for st in states],
             "edges": [transition_edge(where, t) for t in machine.get("transitions") or []]}
+
+def group_tips(spec: dict[str, Any]) -> dict[str, Any]:
+    return {"group_tips": spec["group_tips"]} if "group_tips" in spec else {}
 
 def check_fields(where: str, entity: dict[str, Any]) -> None:
     fields = entity.get("fields") or []
@@ -184,7 +191,7 @@ def check_fields(where: str, entity: dict[str, Any]) -> None:
 
 def relation_edge(r: dict[str, Any]) -> dict[str, Any]:
     label = " ".join(filter(None, (r.get("label"), r.get("cardinality"))))
-    return with_status({"from": r.get("from"), "to": r.get("to"), **({"label": label} if label else {})}, r)
+    return with_display({"from": r.get("from"), "to": r.get("to"), **({"label": label} if label else {})}, r)
 
 def schema_graph(where: str, schema: dict[str, Any]) -> dict[str, Any]:
     """An ER diagram as a graph: entities are nodes listing their fields, relations are edges labelled with their cardinality."""
@@ -193,7 +200,8 @@ def schema_graph(where: str, schema: dict[str, Any]) -> dict[str, Any]:
     check_choice(where, relations, "cardinality", CARDINALITIES)
     for entity in entities:
         check_fields(where, entity)
-    return {"direction": schema.get("direction", "LR"), "nodes": entities, "edges": [relation_edge(r) for r in relations]}
+    return {"direction": schema.get("direction", "LR"), "schema": True, **group_tips(schema),
+            "nodes": entities, "edges": [relation_edge(r) for r in relations]}
 
 GRAPH_BUILDERS = {"graph": lambda where, graph: graph, "machine": machine_graph, "schema": schema_graph}
 
@@ -215,10 +223,10 @@ def check_fragment(where: str, step: dict[str, Any], ids: set[str]) -> None:
     kinds = [k for k in ("alt", *FRAGMENTS) if k in step]
     if len(kinds) != 1:
         sys.exit(f"{where}: a sequence step is a message, a note, or one of alt, loop or opt: {step}")
-    branches = step["alt"] if kinds == ["alt"] else [{"when": step[kinds[0]], "steps": step.get("steps")}]
-    if not isinstance(branches, list) or not branches:
+    arms = step["alt"] if kinds == ["alt"] else [{"when": step[kinds[0]], "steps": step.get("steps")}]
+    if not isinstance(arms, list) or not arms:
         sys.exit(f"{where}: an alt needs a list of {{when, steps}} branches: {step}")
-    for branch in branches:
+    for branch in arms:
         if not branch.get("when"):
             sys.exit(f"{where}: every {kinds[0]} needs a condition: {step}")
         check_steps(where, branch.get("steps"), ids)
@@ -241,6 +249,56 @@ def check_sequence(where: str, seq: dict[str, Any]) -> dict[str, Any]:
     check_steps(where, seq.get("steps"), ids)
     return seq
 
+def branches(step: dict[str, Any]) -> list[dict[str, Any]]:
+    """A fragment's branches: an alt's list, or the one body of a loop or opt."""
+    return step["alt"] if "alt" in step else [step]
+
+def all_sequence_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every message, note and fragment, depth first."""
+    found = []
+    for step in steps:
+        found.append(step)
+        if "from" not in step and "note" not in step:
+            found += [s for b in branches(step) for s in all_sequence_steps(b["steps"])]
+    return found
+
+def element_name(item: dict[str, Any]) -> str:
+    if "from" in item:
+        return f"{item['from']} -> {item['to']}" + (f" ({item['label']})" if item.get("label") else "")
+    if "when" in item:
+        return f"alt [{item['when']}]"
+    return str(item["id"]) if "id" in item else next(f"{k} [{item[k]}]" for k in FRAGMENTS if k in item)
+
+def sequence_parts(step: dict[str, Any]) -> list[dict[str, Any]]:
+    """What a reader hovers for one step: a message, a loop or opt, or each branch of an alt. Notes are already text."""
+    return [] if "note" in step else branches(step)
+
+def diagram_elements(kind: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+    """The elements that need a tip: boxes, arrows and fragments. Groups take theirs from group_tips."""
+    if kind == "sequence":
+        return data["participants"] + [part for s in all_sequence_steps(data["steps"]) for part in sequence_parts(s)]
+    return data["nodes"] + data["edges"]
+
+def optional_tips(kind: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Notes, whole alts and schema fields may take a tip but don't need one."""
+    if kind == "sequence":
+        return [s for s in all_sequence_steps(data["steps"]) if "note" in s or "alt" in s]
+    return [f for n in data["nodes"] for f in n.get("fields") or []]
+
+def check_tips(where: str, kind: str, data: dict[str, Any]) -> bool:
+    """Fails on an empty or non-string tip, and warns about elements a reader can't hover for an explanation.
+    Returns whether the diagram has any tips, so the page can say to hover."""
+    elements, group_tips = diagram_elements(kind, data), data.get("group_tips") or {}
+    tips = [item["tip"] for item in elements + optional_tips(kind, data) if "tip" in item] + list(group_tips.values())
+    if not all(isinstance(tip, str) and tip.strip() for tip in tips):
+        sys.exit(f"{where}: every tip must be non-empty plain text")
+    groups = sorted({n["group"] for n in data.get("nodes", []) if n.get("group")} - group_tips.keys())
+    missing = [element_name(e) for e in elements if not e.get("tip")] + [f"group {g}" for g in groups]
+    if missing:
+        shown = ", ".join(missing[:5]) + (f" and {len(missing) - 5} more" if len(missing) > 5 else "")
+        print(f"warning: {where}: {len(missing)} diagram element(s) have no tip: {shown}", file=sys.stderr)
+    return bool(tips)
+
 def render_diagram(where: str, spec: Flow) -> str:
     """A React Flow placeholder: a sequence, or a graph built from a graph, machine or schema."""
     global has_diagram
@@ -250,6 +308,7 @@ def render_diagram(where: str, spec: Flow) -> str:
     else:
         source = next(k for k in GRAPH_BUILDERS if k in spec)
         kind, data = "graph", check_graph(where, GRAPH_BUILDERS[source](where, spec[source]))
+    data = {**data, "has_tips": check_tips(where, kind, data)}
     return f'<div class="rf-diagram" data-kind="{kind}" data-spec="{html.escape(json.dumps(data))}"></div>'
 
 def render_flow(where: str, flow: Flow) -> str:
