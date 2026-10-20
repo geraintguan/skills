@@ -113,7 +113,7 @@ Overview in the sidebar.
 | Key | What it is |
 |---|---|
 | `id` | A short slug, used for anchors. |
-| `title` | The section name. Gloss jargon in it, for example "DataGrid (the design system)". |
+| `title` | The section name, as HTML, so it can hold `<code>`. Gloss jargon in it, for example "DataGrid (the design system)". |
 | `bridge` | One HTML sentence linking this section to the one before it: what the reader now knows, and what this section adds. The first section's bridge says why the story starts here. Shown under the title, even when the section is collapsed. The builder warns when it's missing after the first section. |
 | `lead` | One sentence saying where to start reading. |
 | `changes` | `{added, modified, deleted}`. Each holds a list of `{impact, text}`. Leave out a type with no entries. |
