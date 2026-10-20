@@ -297,6 +297,11 @@ body.dia-lock { overflow: hidden; }
 .rf-frag { position: relative; width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 4px; }
 .rf-frag:is(.added, .changed, .removed) { border-color: var(--st-fg); }
 .rf-frag-head { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.dia-tip { position: fixed; z-index: 100; max-width: 320px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); color: var(--fg); font-size: 12.5px; line-height: 1.4; pointer-events: none; }
+.dia-tip[hidden] { display: none; }
+.dia-tip-head { font: 600 11px var(--mono); color: var(--accent); overflow-wrap: anywhere; }
+.dia-tip-body { margin-top: 4px; }
+.dia-tip-hint { margin-top: 4px; color: var(--muted); font-size: 11.5px; }
 .rf-frag-tag { font: 600 10px/1 var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 5px 7px; background: var(--soft); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 4px 0 4px 0; color: var(--fg); }
 .rf-frag-else { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); padding: 5px 8px; font-size: 12px; color: var(--muted); }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
@@ -754,6 +759,43 @@ function statusLegend(items) {
   return shown.length ? `<span class="dia-legend">${shown.map((s) => `<span class="dia-chip ${s}">${s}</span>`).join("")}</span>` : "";
 }
 
+// One tooltip serves every diagram. It's fixed to the viewport, so it also shows over a full-screen stage.
+const tipBox = Object.assign(document.createElement("div"), { className: "dia-tip", hidden: true });
+tipBox.setAttribute("role", "tooltip");
+document.body.append(tipBox);
+
+function tipProps(kind, label, tip, clickHint) {
+  return tip || clickHint ? { "data-tip": tip ?? "", "data-tip-kind": kind, "data-tip-label": label ?? "", "data-tip-hint": clickHint ?? "" } : {};
+}
+
+function placeTip(x, y) {
+  const { offsetWidth: w, offsetHeight: h } = tipBox;
+  tipBox.style.left = `${Math.max(8, Math.min(x + 14, innerWidth - w - 8))}px`;
+  tipBox.style.top = `${y + 18 + h > innerHeight ? Math.max(8, y - h - 12) : y + 18}px`;
+}
+
+function showTip({ kind, label, tip, hint }, x, y) {
+  const lines = [["dia-tip-head", [kind, label].filter(Boolean).join(" · ")], ["dia-tip-body", tip], ["dia-tip-hint", hint]];
+  tipBox.replaceChildren(...lines.filter(([, text]) => text).map(([className, textContent]) => Object.assign(document.createElement("div"), { className, textContent })));
+  tipBox.hidden = false;
+  placeTip(x, y);
+}
+
+const hideTip = () => { tipBox.hidden = true; };
+const tipTarget = (el) => el?.closest?.("[data-tip-kind]");
+const tipOf = (el) => ({ kind: el.dataset.tipKind, label: el.dataset.tipLabel, tip: el.dataset.tip, hint: el.dataset.tipHint });
+
+// Elements carry their tooltip in data attributes, so one set of listeners covers every diagram.
+function bindTips() {
+  document.addEventListener("pointerover", (event) => {
+    const el = tipTarget(event.target);
+    if (el) showTip(tipOf(el), event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerout", (event) => { if (tipTarget(event.target) && !tipTarget(event.relatedTarget)) hideTip(); });
+  document.addEventListener("pointermove", (event) => { if (!tipBox.hidden) placeTip(event.clientX, event.clientY); });
+  document.addEventListener("pointerdown", hideTip);
+}
+
 // Keyed by the locked state: the button's symbol and what pressing it does.
 const LOCK_LABELS = { true: ["🔒", "Unlock to move nodes (L)"], false: ["🔓", "Lock nodes in place (L)"] };
 
@@ -837,6 +879,15 @@ function estimatedSize(n) {
   return n.shape === "decision" ? { width: size.width + 48, height: size.height + 36 } : size;
 }
 
+const SHAPE_KINDS = { decision: "Decision", terminal: "Start or end", store: "Store" };
+const nodeKind = (graph, n) => (graph.machine ? "State" : graph.schema ? "Entity" : SHAPE_KINDS[n.shape] ?? "Node");
+const edgeKind = (graph) => (graph.machine ? "Transition" : graph.schema ? "Relation" : "Edge");
+
+function cardHint(data) {
+  if (data.machine) return "Click to move to this state";
+  return data.link ? "Click to open its code" : null;
+}
+
 // Lays the graph out with dagre and returns React Flow nodes and edges. Groups become parent nodes.
 // `sizes` holds the cards' rendered sizes once React Flow has measured them.
 function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
@@ -856,7 +907,7 @@ function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
   const topLeft = (id) => { const p = g.node(id); return { x: p.x - p.width / 2, y: p.y - p.height / 2 }; };
   const clusters = new Map([...groupIds].map(([label, id]) => {
     const c = g.node(id), p = topLeft(id);
-    return [label, { id, type: "cluster", data: { label }, position: { x: p.x, y: p.y - GROUP_LABEL_H }, style: { width: c.width, height: c.height + GROUP_LABEL_H }, selectable: false, zIndex: -1 }];
+    return [label, { id, type: "cluster", data: { label, tip: graph.group_tips?.[label] }, position: { x: p.x, y: p.y - GROUP_LABEL_H }, style: { width: c.width, height: c.height + GROUP_LABEL_H }, selectable: false, zIndex: -1 }];
   }));
   const horizontal = graph.direction === "LR" || graph.direction === "RL";
   const reversed = graph.direction === "BT" || graph.direction === "RL";
@@ -869,13 +920,14 @@ function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
       position: parent ? { x: abs.x - parent.position.x, y: abs.y - parent.position.y } : abs,
       ...(parent ? { parentId: parent.id } : {}),
       sourcePosition: reversed ? target : source, targetPosition: reversed ? source : target,
-      data: { ...n, side, machine: Boolean(graph.machine), loops: links.filter((e) => e.from === n.id && e.to === n.id).map((e) => e.label || "itself") },
+      data: { ...n, side, tipKind: nodeKind(graph, n), machine: Boolean(graph.machine), loops: links.filter((e) => e.from === n.id && e.to === n.id).map((e) => e.label || "itself") },
     };
   });
   // The second of two opposite edges loops round the side handles, so the pair don't overlap.
   const isReturn = (e) => drawn.some((o) => o.from === e.to && o.to === e.from && o.id < e.id);
+  const labels = new Map(graph.nodes.map((n) => [n.id, n.label]));
   const edges = drawn.map((e) => ({
-    id: e.id, source: e.from, target: e.to, ...(isReturn(e) ? { sourceHandle: "side-out", targetHandle: "side-in" } : {}), label: e.label, type: "smoothstep",
+    id: e.id, source: e.from, target: e.to, domAttributes: tipProps(edgeKind(graph), `${labels.get(e.from)} → ${labels.get(e.to)}`, e.tip), ...(isReturn(e) ? { sourceHandle: "side-out", targetHandle: "side-in" } : {}), label: e.label, type: "smoothstep",
     className: e.status || "", animated: e.animated ?? (e.status === "added" || e.status === "changed"),
     markerEnd: { type: flow.MarkerType.ArrowClosed, color: cssVar(STATUS_FG[e.status] ?? "--muted") },
   }));
@@ -885,7 +937,7 @@ function layoutGraph({ dagre, flow }, graph, sizes = new Map()) {
 
 function graphNodeTypes({ React, flow }) {
   const h = React.createElement;
-  const fieldList = (fields) => h("table", { className: "rf-fields" }, h("tbody", null, ...fields.map((f, i) => h("tr", { key: i, className: f.status },
+  const fieldList = (fields) => h("table", { className: "rf-fields" }, h("tbody", null, ...fields.map((f, i) => h("tr", { key: i, className: f.status, ...tipProps("Field", f.name, f.tip) },
     h("td", { className: "rf-key" }, f.key ?? ""), h("td", null, f.name), h("td", { className: "rf-type" }, f.type ?? "")))));
   // The diamond's points are the box's edge midpoints, where the handles already sit.
   const diamond = h("svg", { className: "rf-shape", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": true }, h("polygon", { points: "50,0 100,50 50,100 0,50" }));
@@ -893,7 +945,7 @@ function graphNodeTypes({ React, flow }) {
   const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", title: "Open its code", onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
   const card = ({ data, sourcePosition, targetPosition }) => h("div", {
     className: cls("rf-card", data.status, data.shape, data.final && "final", data.link && !data.machine && "linked"),
-    title: data.link && !data.machine ? "Open its code" : undefined,
+    ...tipProps(data.tipKind, data.label, data.tip, cardHint(data)),
   },
     h(flow.Handle, { type: "target", position: targetPosition, isConnectable: false }),
     data.shape === "decision" ? diamond : null,
@@ -907,7 +959,7 @@ function graphNodeTypes({ React, flow }) {
     h(flow.Handle, { type: "source", position: sourcePosition, isConnectable: false }),
     h(flow.Handle, { type: "target", id: "side-in", position: data.side, isConnectable: false, style: { left: data.side === "bottom" ? "30%" : undefined, top: data.side === "right" ? "30%" : undefined } }),
     h(flow.Handle, { type: "source", id: "side-out", position: data.side, isConnectable: false, style: { left: data.side === "bottom" ? "70%" : undefined, top: data.side === "right" ? "70%" : undefined } }));
-  const cluster = ({ data }) => h("div", { className: "rf-cluster" }, data.label);
+  const cluster = ({ data }) => h("div", { className: "rf-cluster" }, h("span", tipProps("Group", data.label, data.tip), data.label));
   return { card, cluster };
 }
 
@@ -943,7 +995,7 @@ function MachinePanel({ lib, graph, current, setCurrent }) {
   return h("div", { className: "rf-sim" },
     h("span", null, "State ", h("b", null, label(current))),
     events.length ? h("span", null, "· events") : h("span", null, "· no events out"),
-    ...events.map((e, i) => h("button", { key: i, type: "button", className: "dia-btn event", title: `Go to ${label(e.to)}`, onClick: () => setCurrent(e.to) }, e.label)),
+    ...events.map((e, i) => h("button", { key: i, type: "button", className: "dia-btn event", ...tipProps("Event", e.label, e.tip, `Go to ${label(e.to)}`), onClick: () => setCurrent(e.to) }, e.label)),
     current !== graph.machine.initial ? h("button", { type: "button", className: "dia-btn", onClick: () => setCurrent(graph.machine.initial) }, "Reset") : null);
 }
 
@@ -1037,6 +1089,7 @@ async function renderGraph(host) {
   const lib = await loadXyflow();
   const initial = layoutGraph(lib, graph);
   const hints = [graph.machine ? "click a state or an event to move through the machine" : "unlock 🔒 to drag nodes", "hover a node to trace it",
+    graph.has_tips && "hover any part to see what it is",
     graph.nodes.some((n) => n.link) && (graph.machine ? "code ↗ opens a state's code" : "click an underlined node to open its code"),
     statusLegend([...graph.nodes, ...graph.edges])].filter(Boolean);
   mountFlow(host, lib, { lock: true, hints }, initial, panelHeight(graph), (stage) => lib.React.createElement(GraphView, { lib, graph, initial, stage }));
@@ -1088,7 +1141,7 @@ function placeMessage(step, ctx) {
   const width = self ? textWidth(step.label) + SEQ.selfLoop : Math.abs(x2 - x1), height = self ? SEQ.selfRow : SEQ.row;
   const index = ctx.messages++;
   ctx.nodes.push({ id: `m${index}`, type: "message", position: { x: Math.min(x1, x2), y: ctx.y }, style: { width, height }, zIndex: 2,
-    data: { ...step, index, width, height, self, leftward: x2 < x1 } });
+    data: { ...step, index, width, height, self, leftward: x2 < x1, route: `${ctx.label(step.from)} → ${ctx.label(step.to)}` } });
   ctx.y += height;
   return { x1: Math.min(x1, x2), x2: Math.min(x1, x2) + width };
 }
@@ -1109,13 +1162,13 @@ function placeFragment(step, ctx) {
   const sections = [];
   let inner = null;
   branches.forEach((branch, i) => {
-    if (i > 0) { sections.push({ y: ctx.y - top, label: branch.when }); ctx.y += SEQ.elseRow; }
+    if (i > 0) { sections.push({ y: ctx.y - top, label: branch.when, tip: branch.tip }); ctx.y += SEQ.elseRow; }
     inner = union(inner, placeSteps(branch.steps, ctx));
   });
   ctx.y += SEQ.fragFoot;
   const x1 = inner.x1 - SEQ.fragPad, x2 = Math.max(inner.x2 + SEQ.fragPad, x1 + textWidth(`${kind} ${branches[0].when}`) + 40);
   ctx.nodes[slot] = { id: `f${slot}`, type: "fragment", position: { x: x1, y: top }, style: { width: x2 - x1, height: ctx.y - top }, zIndex: 0,
-    data: { kind, label: branches[0].when, sections, status: step.status } };
+    data: { kind, label: branches[0].when, sections, status: step.status, tip: step.tip ?? branches[0].tip } };
   return { x1, x2 };
 }
 
@@ -1123,11 +1176,11 @@ function placeFragment(step, ctx) {
 function layoutSequence(spec) {
   const { index, widths, centres } = sequenceColumns(spec);
   const head = Math.max(...spec.participants.map((p) => estimatedSize(p).height));
-  const ctx = { nodes: [], messages: 0, y: head + SEQ.gap, x: (id) => centres[index.get(id)] };
+  const ctx = { nodes: [], messages: 0, y: head + SEQ.gap, x: (id) => centres[index.get(id)], label: (id) => spec.participants[index.get(id)].label };
   placeSteps(spec.steps, ctx);
   const bottom = ctx.y + SEQ.tail;
   spec.participants.forEach((p, i) => {
-    const data = { ...p, side: "bottom" }, x = centres[i] - widths[i] / 2, style = { width: widths[i] };
+    const data = { ...p, side: "bottom", tipKind: "Participant" }, x = centres[i] - widths[i] / 2, style = { width: widths[i] };
     ctx.nodes.push({ id: `p-${p.id}`, type: "card", position: { x, y: 0 }, style, zIndex: 3, data },
       { id: `p-${p.id}-end`, type: "card", position: { x, y: bottom }, style, zIndex: 3, data },
       { id: `life-${p.id}`, type: "lifeline", position: { x: centres[i], y: head }, style: { width: 1, height: bottom - head }, zIndex: -1, data: {} });
@@ -1138,6 +1191,8 @@ function layoutSequence(spec) {
   return { nodes, messages: ctx.messages, width: right - left, height: bottom + head };
 }
 
+const FRAGMENT_KINDS = { alt: "Alternative branches", loop: "Loop", opt: "Optional steps" };
+
 function sequenceNodeTypes(lib) {
   const { React } = lib;
   const h = React.createElement;
@@ -1146,15 +1201,16 @@ function sequenceNodeTypes(lib) {
     const { width: w, height: hgt, self } = data, y = hgt - 8;
     const path = self ? `M0 22 H${SEQ.selfLoop - 8} V${y} H8` : `M0 ${y} H${w - 8}`;
     const head = self ? `0,${y} 9,${y - 4.5} 9,${y + 4.5}` : `${w},${y} ${w - 9},${y - 4.5} ${w - 9},${y + 4.5}`;
-    return h("div", { className: cls("rf-msg", data.status, data.reply && "reply", self && "self", data.state), title: "Show this step" },
+    return h("div", { className: cls("rf-msg", data.status, data.reply && "reply", self && "self", data.state),
+      ...tipProps(data.reply ? "Reply" : "Message", data.route, data.tip, "Click to show this step") },
       h("svg", { width: w, height: hgt, style: data.leftward ? { transform: "scaleX(-1)" } : undefined, "aria-hidden": true },
         h("path", { d: path }), h("polygon", { points: head })),
       h("div", { className: "rf-msg-label" }, h("span", null, data.label)));
   };
-  const note = ({ data }) => h("div", { className: cls("rf-note", data.status) }, data.note);
+  const note = ({ data }) => h("div", { className: cls("rf-note", data.status), ...tipProps("Note", null, data.tip) }, data.note);
   const fragment = ({ data }) => h("div", { className: cls("rf-frag", data.status) },
-    h("div", { className: "rf-frag-head" }, h("span", { className: "rf-frag-tag" }, data.kind), h("span", null, `[${data.label}]`)),
-    ...data.sections.map((s, i) => h("div", { key: i, className: "rf-frag-else", style: { top: s.y } }, `[${s.label}]`)));
+    h("div", { className: "rf-frag-head", ...tipProps(FRAGMENT_KINDS[data.kind], `[${data.label}]`, data.tip) }, h("span", { className: "rf-frag-tag" }, data.kind), h("span", null, `[${data.label}]`)),
+    ...data.sections.map((s, i) => h("div", { key: i, className: "rf-frag-else", style: { top: s.y }, ...tipProps("Alternative branch", `[${s.label}]`, s.tip) }, `[${s.label}]`)));
   const lifeline = () => h("div", { className: "rf-lifeline" });
   return { ...graphNodeTypes(lib), message, note, fragment, lifeline };
 }
@@ -1224,6 +1280,7 @@ async function renderSequence(host) {
   const lib = await loadXyflow();
   const layout = layoutSequence(spec);
   const hints = ["▶ plays the messages in order; click one to jump to it", "hover a participant to trace it",
+    spec.has_tips && "hover any part to see what it is",
     spec.participants.some((p) => p.link) && "click an underlined participant to open its code",
     statusLegend([...spec.participants, ...allSteps(spec.steps)])].filter(Boolean);
   mountFlow(host, lib, { steps: true, hints }, layout, 0, (stage) => lib.React.createElement(SequenceView, { lib, layout, stage }));
@@ -1257,5 +1314,5 @@ function trackToolbarHeight() {
   update();
 }
 
-renderMeta(); renderToc(); renderMain(); bindToolbar(); trackToolbarHeight(); refresh(); renderDiagrams();
+renderMeta(); renderToc(); renderMain(); bindToolbar(); bindTips(); trackToolbarHeight(); refresh(); renderDiagrams();
 </script>

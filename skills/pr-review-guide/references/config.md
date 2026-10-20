@@ -104,16 +104,35 @@ Every diagram renders in a stage with zoom, fit and full-screen buttons. Readers
 pan and pinch or Ctrl/⌘ + scroll to zoom; plain scrolling still scrolls the page.
 Hovering a node dims everything it isn't connected to.
 
+**Tooltips.** Every element takes a `tip`: plain text, shown as written in a tooltip
+when the reader hovers it. The tooltip's heading names the kind of element and its
+label, such as "Participant · useSaveDraft" or "Edge · getJson → withRetry". Then it
+shows the tip, then what a click does.
+
+- Write one or two sentences on what the element is and what it does in this change.
+  Don't repeat the label. For an actor (a participant, node or entity), say who or what
+  it is and its job in the flow. For an arrow (a message, edge, transition or relation),
+  say what moves along it, or what triggers it.
+- Say what's new or different when the element has a `status`.
+- Nodes, states, participants, entities, edges, transitions, relations, messages, loops,
+  opts and alt branches need one: the builder warns about each that has none. Notes,
+  whole alts and schema fields can take one but don't need it. A graph, machine or
+  schema puts its groups' tips in `group_tips`, keyed by group name.
+
 **Graph** (React Flow, laid out by dagre):
 
 ```json
 "graph": {
   "direction": "LR",
   "nodes": [
-    {"id": "getJson", "label": "getJson", "detail": "src/client.ts", "group": "Client", "status": "changed", "link": "src/client.ts"},
-    {"id": "withRetry", "label": "withRetry", "detail": "src/retry.ts", "group": "Retry helper", "status": "added", "link": "retry"}
+    {"id": "getJson", "label": "getJson", "detail": "src/client.ts", "group": "Client", "status": "changed", "link": "src/client.ts",
+     "tip": "Fetches a URL and parses the body. It now treats non-2xx responses as failures."},
+    {"id": "withRetry", "label": "withRetry", "detail": "src/retry.ts", "group": "Retry helper", "status": "added", "link": "retry",
+     "tip": "New: runs a function up to N times, waiting longer between attempts."}
   ],
-  "edges": [{"from": "getJson", "to": "withRetry", "label": "3 attempts", "status": "added"}]
+  "edges": [{"from": "getJson", "to": "withRetry", "label": "3 attempts", "status": "added",
+             "tip": "getJson now wraps each request in withRetry."}],
+  "group_tips": {"Client": "The app's HTTP layer.", "Retry helper": "The new retry code."}
 }
 ```
 
@@ -125,6 +144,7 @@ Hovering a node dims everything it isn't connected to.
   where a flow starts or ends) or `store` (a cache, queue or database). Leave it out for
   a plain box. Label a decision's edges with the outcomes, such as `yes` and `no`.
 - Edge: `from` and `to` are node ids. `label` is plain text. `status` colours the edge.
+  `tip` shows when the reader hovers the edge or its label.
   `added` and `changed` edges animate unless `animated` is `false`.
 - Graphs and machines start locked: readers can pan and zoom but not move nodes until
   they press 🔒 (or L). Graphs with more than eight nodes get a minimap.
@@ -140,6 +160,9 @@ Hovering a node dims everything it isn't connected to.
   - a fragment: `{loop: condition, steps}`, `{opt: condition, steps}`, or
     `{alt: [{when, steps}, …]}` for branches. Fragments nest.
 - Fragments and notes take a `status` too.
+- Participants and messages take a `tip`, as do a `loop` or `opt` and each `alt` branch
+  (`{when, steps, tip}`). A fragment's tip shows on its header, and each later branch's
+  on its divider.
 - The stage has play, step and "show all" buttons (and P, N and A keys) that walk
   through the messages in order. Clicking a message jumps to it. Hovering a participant
   fades the messages that don't touch it.
