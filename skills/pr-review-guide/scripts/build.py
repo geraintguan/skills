@@ -37,7 +37,9 @@ Config keys:
     state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
     decisions: [{impact: "High"|"Medium"|"Low", text: HTML}]  # key design decisions, shown grouped by impact
-    metrics: [{name, change: "Added"|"Modified"|"Removed", where, tracks: HTML, why: HTML, file?}]
+    api: [{name, method, protocol, change: "Added"|"Modified"|"Removed", does: HTML, why: HTML, file?}]
+         # every API endpoint the PR touches; [] shows "No API changes", a missing key warns
+    metrics: [{name, change, where, tracks: HTML, why: HTML, file?}]
              # every metric, log, span or analytics event the PR touches; [] shows "No metric changes", a missing key warns
     flags: [{name, code?, change, gates: HTML, why: HTML, default?: HTML, file?}]
            # every feature flag the PR touches; [] shows "No feature flags", a missing key warns
@@ -370,6 +372,9 @@ def check_rows(where: str, rows: Any, required: set[str], optional: set[str]) ->
             check_link(f"{where} {row['name']}", row["file"])
 
 OVERVIEW_TABLES = {
+    "api": dict(slug="api", heading="API", noun="API endpoint", empty="No API changes.", name_heading="Endpoint",
+                required={"name", "method", "protocol", "change", "does", "why"}, optional={"file"},
+                columns=[("method", "Method"), ("protocol", "Protocol"), ("does", "What it does"), ("why", "Why")]),
     "metrics": dict(slug="metrics", heading="Metrics", noun="metric", empty="No metric changes.",
                     required={"name", "change", "where", "tracks", "why"}, optional={"file"},
                     columns=[("where", "Where it's tracked"), ("tracks", "What it tracks"), ("why", "Why")]),
@@ -623,7 +628,7 @@ def name_cell(row: dict[str, Any]) -> str:
         name += f'<div class="ov-code">code: <code>{html.escape(row["code"])}</code></div>'
     return name
 
-def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]], empty: str) -> str:
+def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]], empty: str, name_heading: str = "Name") -> str:
     """An overview table with a name and change column first; columns are (key, heading) pairs of HTML cells."""
     if not rows:
         return f'<p class="ov-empty">{empty}</p>'
@@ -631,7 +636,7 @@ def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]], emp
         f'<tr><td>{name_cell(r)}</td><td><span class="tchg {r["change"]}">{r["change"]}</span></td>'
         + "".join(f"<td>{r.get(k) or ''}</td>" for k, _ in columns) + "</tr>"
         for r in rows)
-    return grid_table(["Name", "Change", *(h for _, h in columns)], body)
+    return grid_table([name_heading, "Change", *(h for _, h in columns)], body)
 
 Overview = dict[str, Any]
 
@@ -664,14 +669,14 @@ def table_part(key: str) -> Callable[[Overview], str]:
     def part(ov: Overview) -> str:
         if key not in ov:
             return ""
-        return ov_part(table["slug"], table["heading"], render_table(ov[key], table["columns"], table["empty"]))
+        return ov_part(table["slug"], table["heading"], render_table(ov[key], table["columns"], table["empty"], table.get("name_heading", "Name")))
     return part
 
 OVERVIEW_PARTS = (
     summary_part, before_after_part, architecture_part,
     lambda ov: overview_flows("data-flow", "Data flow", ov.get("data_flow", [])),
     lambda ov: overview_flows("state", "State", ov.get("state", [])),
-    layout_part, decisions_part, table_part("metrics"), table_part("flags"),
+    layout_part, decisions_part, table_part("api"), table_part("metrics"), table_part("flags"),
 )
 
 def render_overview(ov: Optional[Overview]) -> str:

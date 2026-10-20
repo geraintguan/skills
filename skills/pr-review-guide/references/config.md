@@ -41,11 +41,12 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 | `data_flow` | A list of flows, each `{title, sequence or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey, usually a `sequence`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
 | `decisions` | Design decisions as `{impact, text}`, shown grouped by impact, highest first. `impact` is `High`, `Medium` or `Low` (see "Decision impact"). `text` is HTML. Mark the ones the user made with `<em>(your call)</em>`. |
+| `api` | Every API endpoint the PR adds, modifies or removes. See "API endpoints". `[]` shows "No API changes". The builder warns when the key is missing. |
 | `metrics` | Every metric the PR adds, modifies or removes: logs, OpenTelemetry (oTel) metrics and spans, analytics events. See "Metrics and flags". `[]` shows "No metric changes". The builder warns when the key is missing. |
 | `flags` | Every feature flag the PR adds, modifies or removes. See "Metrics and flags". `[]` shows "No feature flags". The builder warns when the key is missing. |
 
 Each overview part (summary, before and after, architecture, data flow, state, code
-layout, key decisions, metrics, feature flags) that has content gets its own entry under
+layout, key decisions, API, metrics, feature flags) that has content gets its own entry under
 Overview in the sidebar.
 
 ### Decision impact
@@ -55,6 +56,30 @@ Overview in the sidebar.
 - **Medium:** a real trade-off with limited reach, such as a default, a threshold or a
   library choice.
 - **Low:** local choices that are easy to change later, such as naming or file layout.
+
+### API endpoints
+
+```json
+"api": [
+  {"name": "/api/drafts/:id", "method": "PUT", "protocol": "REST", "change": "Added", "file": "src/server/drafts.ts",
+   "does": "Saves a draft's body and returns its new <code>version</code>.",
+   "why": "Autosave needs an idempotent save; <code>POST /api/drafts</code> made a new draft each time."},
+  {"name": "drafts.list", "method": "GET (query)", "protocol": "tRPC", "change": "Modified", "file": "src/server/routers/drafts.ts",
+   "does": "Lists the user's drafts, newest first.",
+   "why": "Takes an optional <code>cursor</code> so long lists page instead of loading at once."}
+]
+```
+
+- `name` is the route path, or the procedure or operation name for RPC-style APIs.
+- `method` is the HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. For tRPC or
+  GraphQL, add the kind, such as `GET (query)` or `POST (mutation)`.
+- `protocol` is the API style: `REST`, `RESTful`, `tRPC`, `GraphQL`, `gRPC`, `JSON-RPC`,
+  `Webhook`, `WebSocket`.
+- `does` is a short description of what the endpoint does. `why` says why it's added,
+  modified or removed. Both are HTML.
+- `change` is `Added`, `Modified` or `Removed`. A change to inputs, outputs, auth or
+  status codes is Modified. `file` is optional: a link target, usually the file that
+  defines the endpoint. The name then links there.
 
 ### Metrics and flags
 
