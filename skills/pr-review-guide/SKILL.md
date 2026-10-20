@@ -4,7 +4,7 @@ description: >-
   Builds an interactive review guide for a pull request or branch diff and publishes
   it as an artifact. The guide has a high-level overview (summary, before/after,
   an interactive architecture graph, data flow diagrams, interactive state machines,
-  code layout, key decisions). Every diagram can be panned, zoomed and opened full screen;
+  code layout, key decisions by impact, metrics and feature flags). Every diagram can be panned, zoomed and opened full screen;
   nodes link to their code, sequence diagrams play their messages step by step, and
   state machines can be clicked through event by event. Sections
   follow review order, each with its own data flow diagram and its changes listed as
@@ -34,7 +34,8 @@ From top to bottom:
    the guide, and legends for impact levels and test types.
 2. **Overview.** Summary, before/after cards, an interactive architecture graph, the
    high-level data flow across the whole change, the main state machines it touches, a
-   code-layout table, and key decisions.
+   code-layout table, key decisions grouped by impact, a Metrics table and a Feature
+   flags table. Each part has its own entry under Overview in the sidebar.
 3. **Sections, in review order.** Each section has:
    - a caret, plus counts per impact level
    - a bridge: one sentence linking it to the section before, so the story carries on
@@ -55,8 +56,10 @@ From top to bottom:
    animated, and nodes tagged added, changed or removed get matching colours. State
    machines start in their initial state; clicking a state or one of its events moves
    there, and the transitions out of the current state animate.
-5. **Sidebar and toolbar.** The sidebar lists every file, has collapsible sections, and
-   shows progress. The toolbar has hide tests/stories, hide line notes, and expand or
+5. **Tables.** Every table (code layout, metrics, feature flags, tests and fixtures)
+   shares one style, and readers can drag a column's edge to resize it.
+6. **Sidebar and toolbar.** The sidebar lists the overview's parts and every file, has
+   collapsible sections, and shows progress. The toolbar has hide tests/stories, hide line notes, and expand or
    collapse all.
 
 Reviewing is tracked in the viewer's browser. Ticking a file collapses it. Once every
@@ -76,6 +79,10 @@ in the sidebar.
 - Pick out test and eval data fixtures: sample documents (PDF, DOCX), images, recorded
   responses, golden outputs and eval datasets. These go in the `fixtures` of the section
   whose tests or evals use them, not in `files`. Read enough of each to say what it holds.
+- Find every metric and feature flag the diff adds, changes or removes. Search the diff
+  for the project's analytics, logging and tracing calls (such as `track(`, `logger.`,
+  OpenTelemetry spans and counters) and its flag checks (such as Statsig gates or
+  LaunchDarkly flags). Note where each is tracked and why it changed.
 - If the repo has confidentiality rules for PRs (a CLAUDE.md or AGENTS.md), they apply
   to the page too. The page is shareable.
 
@@ -146,7 +153,13 @@ The parts, in the order to write them:
   adds, changes or removes, group nodes by area, and link each node to its section or
   file. The data flow shows how data moves across
   the whole change (see below). The layout table has the paths and what each does in
-  this PR. Decisions mark the ones the user made.
+  this PR. Decisions each get a High, Medium or Low impact and mark the ones the user
+  made.
+- **Overview `metrics` and `flags`.** One row per metric (log, OpenTelemetry metric or
+  span, analytics event) and per feature flag the PR adds, modifies or removes. A metric
+  says where it's tracked, what it tracks and why it changed. A flag says what it gates
+  and why it changed. Set `[]` when there are none, so the page says so; the builder
+  warns when a key is missing.
 - **Section `data_flow`.** Every section gets one, focused on that section only. See
   "Data flow diagrams" below.
 - **`state`.** Wherever the change adds or changes state, model it as a finite state
@@ -288,8 +301,10 @@ The builder fails on any of these:
 - a changed file in no section
 - a fixture path that matches no changed file, or a file listed both as a fixture and in
   `files`, or as a fixture in two sections
-- a single string where a list belongs: the overview's `summary`, `before`, `after` or
-  `decisions`, or `meta_extra` or `skip_prefixes`
+- a single string where a list belongs: the overview's `summary`, `before` or `after`,
+  or `meta_extra` or `skip_prefixes`
+- a decision with no text or impact, or a metric or flag row with a missing or unknown
+  key, an unknown change, or a `file` that isn't a link target
 - an empty diff for a listed file
 - a line note outside the diff
 - an unknown change type, impact level or test type

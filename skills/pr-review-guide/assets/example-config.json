@@ -77,7 +77,17 @@
       {"path": "src/retry.ts", "role": "New generic retry helper.", "group": "retry"},
       {"path": "src/client.ts", "role": "Uses the helper and treats HTTP errors as failures.", "group": "client"}
     ],
-    "decisions": ["Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"]
+    "decisions": [
+      {"impact": "High", "text": "Non-2xx responses throw, so callers that read error bodies now get an error instead. <em>(your call)</em>"},
+      {"impact": "Medium", "text": "Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"},
+      {"impact": "Low", "text": "<code>withRetry</code> knows nothing about HTTP, so other callers can reuse it later."}
+    ],
+    "metrics": [
+      {"name": "withRetry gave up", "change": "Added", "where": "Log (<code>console.warn</code>)", "file": "src/retry.ts",
+       "tracks": "Each call that fails on every attempt, with the attempt count and the last error.",
+       "why": "Retries used to fail silently. This shows how often backoff runs out, before anyone tunes the attempts."}
+    ],
+    "flags": []
   },
   "groups": [
     {
@@ -122,6 +132,7 @@
       "changes": {
         "added": [
           {"impact": "High", "text": "<code>withRetry</code> runs <code>fn</code> up to <code>attempts</code> times. It sleeps <code>backoffDelay</code> between attempts and rethrows the last error."},
+          {"impact": "Low", "text": "A <code>withRetry gave up</code> warning log when every attempt fails."},
           {"impact": "Low", "text": "<code>backoffDelay</code> unit test."}
         ],
         "deleted": [{"impact": "Low", "text": "<code>retryThreeTimes</code>. Its only caller moved to <code>withRetry</code>."}]
