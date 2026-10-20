@@ -634,7 +634,7 @@ def render_impact_levels(decisions: list[dict[str, Any]]) -> str:
 def render_decisions(decisions: list[dict[str, Any]]) -> str:
     """Decisions grouped by the area they touch, then by impact within each area."""
     return "".join(
-        f'<div class="ov-dec-area"><h4>{html.escape(area)}<span class="count">{len(items)}</span></h4>{render_impact_levels(items)}</div>'
+        f'<div class="ov-dec-area"><h4>{area}<span class="count">{len(items)}</span></h4>{render_impact_levels(items)}</div>'
         for area, items in decisions_by_area(decisions).items())
 
 def name_cell(row: dict[str, Any]) -> str:
@@ -740,7 +740,7 @@ assets = pathlib.Path(__file__).resolve().parent.parent / "assets"
 tpl = (assets / "template.html").read_text()
 overview = render_overview(cfg.get("overview"))
 for key, value in {
-    "__TITLE__": html.escape(cfg["title"]), "__EYEBROW__": cfg["eyebrow"], "__H1__": cfg["h1"],
+    "__TITLE__": re.sub(r"<[^>]*>", "", cfg["title"]), "__EYEBROW__": cfg["eyebrow"], "__H1__": cfg["h1"],
     "__LEDE__": cfg["lede"], "__OVERVIEW__": overview, "__PR_URL__": cfg["pr_url"], "__STORE_KEY__": cfg["store_key"],
 }.items():
     tpl = tpl.replace(key, value)
