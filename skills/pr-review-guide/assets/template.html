@@ -378,6 +378,7 @@ function saveReviewed(set) { try { localStorage.setItem(STORE_KEY, JSON.stringif
 const reviewed = loadReviewed();
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const plainText = (markup) => Object.assign(document.createElement("template"), { innerHTML: markup }).content.textContent;
 const fileId = (path) => "f-" + path.replace(/[^A-Za-z0-9]+/g, "-");
 const FILENAME_LANGS = { dockerfile: "dockerfile", makefile: "makefile", gemfile: "ruby", rakefile: "ruby" };
 const EXTENSION_LANGS = { jsonc: "json", vue: "xml", svelte: "xml" };
@@ -610,9 +611,9 @@ function renderMeta() {
 // One sidebar group: a numbered heading linking to `id`, and a collapsible list of items when it has any.
 function tocGroup({ id, n, title, items, attrs = "" }) {
   const chev = items
-    ? `<button class="toc-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(title)} entries">▾</button>`
+    ? `<button class="toc-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(plainText(title))} entries">▾</button>`
     : '<span class="toc-chev spacer" aria-hidden="true">▾</span>';
-  return `<div class="toc-group" ${attrs}><div class="toc-head">${chev}<a href="#${id}"><span class="n">${n}</span>${esc(title)}</a></div>${items ? `<ul>${items}</ul>` : ""}</div>`;
+  return `<div class="toc-group" ${attrs}><div class="toc-head">${chev}<a href="#${id}"><span class="n">${n}</span><span class="toc-title">${title}</span></a></div>${items ? `<ul>${items}</ul>` : ""}</div>`;
 }
 
 function overviewToc() {
@@ -678,7 +679,7 @@ function renderMain() {
     s.className = "group"; s.id = g.id;
     const add = g.files.reduce((a, f) => a + f.add, 0), rem = g.files.reduce((a, f) => a + f.rem, 0);
     s.innerHTML = `<div class="group-head">
-        <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)}">▾</button><span class="n">${i + 1}</span>${esc(g.title)} <span class="n">${g.files.length} files · ${lineStat(add, rem)}</span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
+        <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(plainText(g.title))}">▾</button><span class="n">${i + 1}</span><span class="sec-title">${g.title}</span> <span class="n">${g.files.length} files · ${lineStat(add, rem)}</span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
         ${g.bridge ? `<p class="bridge">${g.bridge}</p>` : ""}
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
         ${g.data_flow ? `<details class="flow" open><summary>Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}

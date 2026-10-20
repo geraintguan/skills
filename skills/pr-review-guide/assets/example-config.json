@@ -163,7 +163,7 @@
     },
     {
       "id": "client",
-      "title": "HTTP client",
+      "title": "HTTP client (<code>getJson</code>)",
       "bridge": "With <code>withRetry</code> in place, the client can lean on it. The one real change is deciding what counts as a failure.",
       "lead": "Check the <code>response.ok</code> guard.",
       "data_flow": [{
