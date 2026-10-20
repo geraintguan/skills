@@ -82,6 +82,7 @@
       {"impact": "Medium", "text": "Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"},
       {"impact": "Low", "text": "<code>withRetry</code> knows nothing about HTTP, so other callers can reuse it later."}
     ],
+    "api": [],
     "metrics": [
       {"name": "withRetry gave up", "change": "Added", "where": "Log (<code>console.warn</code>)", "file": "src/retry.ts",
        "tracks": "Each call that fails on every attempt, with the attempt count and the last error.",
