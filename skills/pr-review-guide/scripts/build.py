@@ -20,7 +20,7 @@ Config keys:
             lead: optional HTML sentence (where to start),
             changes: {added|modified|deleted: [{impact: "High"|"Medium"|"Low", text: HTML}]}}]
           (legacy: note: [HTML strings] renders a plain list when changes is absent)
-            tests: [{file, name, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
+            tests: [{file, name, summary, change: "Added"|"Modified"|"Removed", type: "Unit"|"Integration"|"E2E",
                      inputs: HTML, expected: HTML, why: HTML}]  one row per test changed; shown in its file's card
             tests_file: path to a JSON file holding that array (relative to the config), merged into tests
             data_flow: [{title?, sequence: Sequence | graph: Graph | machine: Machine | schema: Schema, caption?: HTML}]
@@ -500,7 +500,7 @@ for g in cfg["groups"]:
     group_paths = {f["path"] for f in files}
     rows_by_file = defaultdict(list)
     for row in tests:
-        missing_keys = {"file", "name", "change", "type", "inputs", "expected", "why"} - row.keys()
+        missing_keys = {"file", "name", "summary", "change", "type", "inputs", "expected", "why"} - row.keys()
         if missing_keys:
             sys.exit(f"{g['id']}: test row missing {sorted(missing_keys)}: {row.get('name')}")
         if row["change"] not in ("Added", "Modified", "Removed") or row["type"] not in ("Unit", "Integration", "E2E"):

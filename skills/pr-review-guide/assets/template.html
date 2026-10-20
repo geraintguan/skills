@@ -469,7 +469,7 @@ function renderTests(rows) {
     .map(([c, n]) => `${n} ${c.toLowerCase()}`).join(" · ");
   const body = tests.map((x) => `<tr>
       <td><span class="tchg ${x.change}">${x.change}</span></td>
-      <td class="tname">${esc(x.name)}</td>
+      <td class="tname" title="${esc(x.name)}">${x.summary}</td>
       <td><span class="ttype">${x.type}</span></td>
       <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
   const cols = TEST_COLUMNS.map(([, pct]) => `<col style="width:${pct}%">`).join("");

@@ -143,7 +143,8 @@
         ]
       },
       "tests": [
-        {"file": "src/retry.test.ts", "name": "backoffDelay › doubles the delay on each attempt", "change": "Added", "type": "Unit",
+        {"file": "src/retry.test.ts", "name": "backoffDelay › doubles the delay on each attempt",
+         "summary": "Backoff doubles after each failed attempt.", "change": "Added", "type": "Unit",
          "inputs": "Attempts 0, 1 and 2 with a 100 ms base.", "expected": "<code>[100, 200, 400]</code>.",
          "why": "Pins the backoff curve. <code>withRetry</code> itself has no test yet, which is a gap."}
       ]
