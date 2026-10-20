@@ -310,9 +310,13 @@ body.dia-lock { overflow: hidden; }
 .ov-flows { display: flex; flex-direction: column; gap: 12px; }
 .ov-decisions { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; max-width: 90ch; }
 .ov-part { scroll-margin-top: 70px; }
-.ov-dec-level + .ov-dec-level { margin-top: 12px; }
-.ov-dec-level h4 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; font: 500 12px var(--mono); color: var(--muted); }
-.ov-dec-level h4 .imp { padding: 3px 6px; }
+.ov-dec-area + .ov-dec-area { margin-top: 18px; }
+.ov-dec-area > h4 { margin: 0 0 8px; display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; }
+.ov-dec-area > .ov-dec-level { padding-left: 12px; border-left: 2px solid var(--line); }
+.ov-dec-area > h4 .count { font: 500 12px var(--mono); color: var(--muted); }
+.ov-dec-level + .ov-dec-level { padding-top: 10px; }
+.ov-dec-level h5 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; font: 500 12px var(--mono); color: var(--muted); }
+.ov-dec-level h5 .imp { padding: 3px 6px; }
 .ov-code { margin-top: 2px; font: 11px var(--mono); color: var(--muted); }
 .ov-empty { margin: 0; color: var(--muted); font-size: 13.5px; }
 .toc-group li.toc-ov a { padding-left: 2px; }

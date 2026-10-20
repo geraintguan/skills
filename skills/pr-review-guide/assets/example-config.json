@@ -78,9 +78,9 @@
       {"path": "src/client.ts", "role": "Uses the helper and treats HTTP errors as failures.", "group": "client"}
     ],
     "decisions": [
-      {"impact": "High", "text": "Non-2xx responses throw, so callers that read error bodies now get an error instead. <em>(your call)</em>"},
-      {"impact": "Medium", "text": "Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"},
-      {"impact": "Low", "text": "<code>withRetry</code> knows nothing about HTTP, so other callers can reuse it later."}
+      {"area": "Error handling", "impact": "High", "text": "Non-2xx responses throw, so callers that read error bodies now get an error instead. <em>(your call)</em>"},
+      {"area": "Retry policy", "impact": "Medium", "text": "Fixed exponential backoff without jitter, because there's only one caller today. <em>(your call)</em>"},
+      {"area": "Retry policy", "impact": "Low", "text": "<code>withRetry</code> knows nothing about HTTP, so other callers can reuse it later."}
     ],
     "api": [],
     "metrics": [
