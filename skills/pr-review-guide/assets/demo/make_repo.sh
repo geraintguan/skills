@@ -42,6 +42,7 @@ export async function withRetry<T>(fn: () => Promise<T>, { attempts, baseDelayMs
       if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, backoffDelay(attempt, baseDelayMs)));
     }
   }
+  console.warn("withRetry gave up", { attempts, error: lastError });
   throw lastError;
 }
 EOF

@@ -36,8 +36,13 @@ Config keys:
     data_flow: [{title?, sequence | graph | machine | schema, caption?}]  # high-level data flow across the whole change
     state: [flows]  # the main state machines the change touches
     layout: [{path, role (HTML), group (group id)}]  # where the code lives; +/- is summed per path prefix
-    decisions: [HTML bullets: key design decisions and who made them]
+    decisions: [{impact: "High"|"Medium"|"Low", text: HTML}]  # key design decisions, shown grouped by impact
+    metrics: [{name, change: "Added"|"Modified"|"Removed", where, tracks: HTML, why: HTML, file?}]
+             # every metric, log, span or analytics event the PR touches; [] shows "No metric changes", a missing key warns
+    flags: [{name, code?, change, gates: HTML, why: HTML, default?: HTML, file?}]
+           # every feature flag the PR touches; [] shows "No feature flags", a missing key warns
   }
+  Each overview part gets an entry under Overview in the sidebar.
   Graph (rendered with React Flow): {direction?: "TB"|"LR"|"BT"|"RL",
     nodes: [{id, label, detail?, group?, status?: "added"|"changed"|"removed", shape?: "decision"|"terminal"|"store", link?, tip?}],
     edges: [{from, to, label?, status?, animated?, tip?}], group_tips?: {group: text}}
@@ -60,7 +65,7 @@ The script fails if a changed file is in no group and not skipped.
 """
 import functools, html, json, re, subprocess, sys, pathlib
 from collections import defaultdict
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import usage
 
@@ -339,7 +344,7 @@ def embed_diagrams(where: str, value: Any) -> Any:
         return value
     return DIAGRAM_REF.sub(lambda m: embed_diagram(where, m), value)
 
-OVERVIEW_LISTS = ("summary", "before", "after", "decisions")
+OVERVIEW_LISTS = ("summary", "before", "after")
 
 def check_lists(where: str, section: dict[str, Any], keys: tuple[str, ...]) -> None:
     """A string where a list belongs renders one character per item, such as a paragraph per letter."""
@@ -347,10 +352,47 @@ def check_lists(where: str, section: dict[str, Any], keys: tuple[str, ...]) -> N
         if key in section and not (isinstance(section[key], list) and all(isinstance(item, str) for item in section[key])):
             sys.exit(f"{where}: {key} must be a list of strings, one per item, not {type(section[key]).__name__}")
 
-check_lists("overview", cfg.get("overview") or {}, OVERVIEW_LISTS)
+IMPACTS = ("High", "Medium", "Low")
+CHANGES = ("Added", "Modified", "Removed")
+
+def check_rows(where: str, rows: Any, required: set[str], optional: set[str]) -> None:
+    """Rows of an overview table: a list of objects with the required keys, a known change and a valid file link."""
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        sys.exit(f"{where} must be a list of objects")
+    for row in rows:
+        missing, unknown = required - row.keys(), row.keys() - required - optional
+        if missing:
+            sys.exit(f"{where}: row {row.get('name')!r} is missing {sorted(missing)}")
+        if unknown:
+            sys.exit(f"{where}: row {row['name']!r} has unknown keys {sorted(unknown)}")
+        check_choice(where, [row], "change", CHANGES)
+        if row.get("file"):
+            check_link(f"{where} {row['name']}", row["file"])
+
+OVERVIEW_TABLES = {
+    "metrics": dict(slug="metrics", heading="Metrics", noun="metric", empty="No metric changes.",
+                    required={"name", "change", "where", "tracks", "why"}, optional={"file"},
+                    columns=[("where", "Where it's tracked"), ("tracks", "What it tracks"), ("why", "Why")]),
+    "flags": dict(slug="flags", heading="Feature flags", noun="feature flag", empty="No feature flags.",
+                  required={"name", "change", "gates", "why"}, optional={"code", "default", "file"},
+                  columns=[("gates", "What it gates"), ("why", "Why"), ("default", "Default")]),
+}
+
+def check_overview(ov: dict[str, Any]) -> None:
+    check_lists("overview", ov, OVERVIEW_LISTS)
+    decisions = ov.get("decisions", [])
+    if not isinstance(decisions, list) or not all(isinstance(d, dict) and d.get("text") for d in decisions):
+        sys.exit("overview.decisions must be a list of {impact, text}")
+    check_choice("overview.decisions", decisions, "impact", IMPACTS)
+    for key, table in OVERVIEW_TABLES.items():
+        if key not in ov:
+            print(f"warning: overview has no {key}; set it to [] if the PR changes no {table['noun']}s", file=sys.stderr)
+        check_rows(f"overview.{key}", ov.get(key, []), table["required"], table["optional"])
+
 check_lists("config", cfg, ("meta_extra", "skip_prefixes"))
 cfg["groups"] = [embed_diagrams(g["id"], g) for g in cfg["groups"]]
 if cfg.get("overview"):
+    check_overview(cfg["overview"])
     cfg["overview"] = embed_diagrams("overview", cfg["overview"])
 for name in named_diagrams.keys() - used_diagrams:
     print(f"warning: diagram {name!r} is never used; put <div data-diagram=\"{name}\"></div> in an HTML field", file=sys.stderr)
@@ -503,7 +545,7 @@ for g in cfg["groups"]:
         missing_keys = {"file", "name", "summary", "change", "type", "inputs", "expected", "why"} - row.keys()
         if missing_keys:
             sys.exit(f"{g['id']}: test row missing {sorted(missing_keys)}: {row.get('name')}")
-        if row["change"] not in ("Added", "Modified", "Removed") or row["type"] not in ("Unit", "Integration", "E2E"):
+        if row["change"] not in CHANGES or row["type"] not in ("Unit", "Integration", "E2E"):
             sys.exit(f"{g['id']}: bad change/type in test row {row['name']}")
         if row["file"] not in group_paths:
             sys.exit(f"{g['id']}: test file {row['file']} is not in this group's files")
@@ -515,7 +557,7 @@ for g in cfg["groups"]:
         if kind not in ("added", "modified", "deleted"):
             sys.exit(f"{g['id']}: unknown change type {kind}")
         for c in items:
-            if c.get("impact") not in ("High", "Medium", "Low"):
+            if c.get("impact") not in IMPACTS:
                 sys.exit(f"{g['id']}: impact must be High, Medium or Low: {c}")
     if groups and not g.get("bridge"):
         print(f"warning: section {g['id']} has no bridge from the section before it", file=sys.stderr)
@@ -533,43 +575,111 @@ missing = [f for f in git("diff", "--name-only", base, head).split() if f not in
 if missing:
     sys.exit("changed files in no group:\n  " + "\n  ".join(missing))
 
-def overview_flows(heading: str, flows: list[Flow]) -> str:
+def ov_part(slug: str, heading: str, body: str, show_heading: bool = True) -> str:
+    """One overview part. Its id and data-nav label give it an entry under Overview in the sidebar."""
+    h3 = f"<h3>{heading}</h3>" if show_heading else ""
+    return f'<div class="ov-part" id="ov-{slug}" data-nav="{html.escape(heading)}">{h3}{body}</div>'
+
+def overview_flows(slug: str, heading: str, flows: list[Flow]) -> str:
     if not check_flows("overview", flows):
         return ""
-    return (f'<div><h3>{heading}</h3><div class="ov-flows">'
-            + "".join(f'<div class="ov-diagram">{render_flow("overview", f)}</div>' for f in flows) + "</div></div>")
+    return ov_part(slug, heading, '<div class="ov-flows">'
+                   + "".join(f'<div class="ov-diagram">{render_flow("overview", f)}</div>' for f in flows) + "</div>")
 
-def render_overview(ov):
+def bullets(items: list[str]) -> str:
+    return "".join(f"<li>{i}</li>" for i in items)
+
+def line_stat(prefix: str) -> str:
+    fs = [f for g in groups for f in g["files"] if f["path"].startswith(prefix)]
+    return f'<span class="plus">+{sum(f["add"] for f in fs)}</span> <span class="minus">−{sum(f["rem"] for f in fs)}</span>'
+
+def grid_table(headings: list[str], rows: str) -> str:
+    """A resizable data table in a panel; the page adds the column handles."""
+    head = "".join(f"<th>{h}</th>" for h in headings)
+    return f'<div class="grid-panel grid-scroll"><table class="grid"><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
+
+def render_layout(layout: list[dict[str, Any]]) -> str:
+    rows = "".join(
+        f'<tr><td class="mono"><a href="#{r["group"]}">{html.escape(r["path"])}</a></td><td>{r["role"]}</td><td class="num">{line_stat(r["path"])}</td></tr>'
+        for r in layout)
+    return grid_table(["Where", "What it does in this PR", "Lines"], rows)
+
+def render_decisions(decisions: list[dict[str, Any]]) -> str:
+    """Decisions grouped under their impact level, highest first."""
+    blocks = []
+    for level in IMPACTS:
+        items = [d["text"] for d in decisions if d["impact"] == level]
+        if items:
+            blocks.append(f'<div class="ov-dec-level"><h4><span class="imp {level.lower()}">{level}</span>'
+                          f'<span class="count">{len(items)}</span></h4><ul class="ov-decisions">{bullets(items)}</ul></div>')
+    return "".join(blocks)
+
+def name_cell(row: dict[str, Any]) -> str:
+    """The row's name, linked to the file that defines it when there is one."""
+    name = f"<code>{html.escape(row['name'])}</code>"
+    if row.get("file"):
+        name = f'<a href="#" data-link="{html.escape(row["file"])}">{name}</a>'
+    if row.get("code") and row["code"] != row["name"]:
+        name += f'<div class="ov-code">code: <code>{html.escape(row["code"])}</code></div>'
+    return name
+
+def render_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]], empty: str) -> str:
+    """An overview table with a name and change column first; columns are (key, heading) pairs of HTML cells."""
+    if not rows:
+        return f'<p class="ov-empty">{empty}</p>'
+    body = "".join(
+        f'<tr><td>{name_cell(r)}</td><td><span class="tchg {r["change"]}">{r["change"]}</span></td>'
+        + "".join(f"<td>{r.get(k) or ''}</td>" for k, _ in columns) + "</tr>"
+        for r in rows)
+    return grid_table(["Name", "Change", *(h for _, h in columns)], body)
+
+Overview = dict[str, Any]
+
+def summary_part(ov: Overview) -> str:
+    if not ov.get("summary"):
+        return ""
+    return ov_part("summary", "Summary", '<div class="ov-summary">' + "".join(f"<p>{p}</p>" for p in ov["summary"]) + "</div>", show_heading=False)
+
+def before_after_part(ov: Overview) -> str:
+    if not (ov.get("before") or ov.get("after")):
+        return ""
+    return ov_part("before-after", "Before and after", '<div class="ov-ba">'
+                   f'<div class="ov-card before"><h3>Before</h3><ul>{bullets(ov.get("before", []))}</ul></div>'
+                   f'<div class="ov-card after"><h3>After</h3><ul>{bullets(ov.get("after", []))}</ul></div></div>', show_heading=False)
+
+def architecture_part(ov: Overview) -> str:
+    if not ov.get("graph"):
+        return ""
+    arch = {"graph": ov["graph"], "caption": ov.get("diagram_caption")}
+    return ov_part("architecture", "Architecture", f'<div class="ov-diagram">{render_flow("overview", arch)}</div>')
+
+def layout_part(ov: Overview) -> str:
+    return ov_part("layout", "Code layout", render_layout(ov["layout"])) if ov.get("layout") else ""
+
+def decisions_part(ov: Overview) -> str:
+    return ov_part("decisions", "Key decisions", render_decisions(ov["decisions"])) if ov.get("decisions") else ""
+
+def table_part(key: str) -> Callable[[Overview], str]:
+    table = OVERVIEW_TABLES[key]
+    def part(ov: Overview) -> str:
+        if key not in ov:
+            return ""
+        return ov_part(table["slug"], table["heading"], render_table(ov[key], table["columns"], table["empty"]))
+    return part
+
+OVERVIEW_PARTS = (
+    summary_part, before_after_part, architecture_part,
+    lambda ov: overview_flows("data-flow", "Data flow", ov.get("data_flow", [])),
+    lambda ov: overview_flows("state", "State", ov.get("state", [])),
+    layout_part, decisions_part, table_part("metrics"), table_part("flags"),
+)
+
+def render_overview(ov: Optional[Overview]) -> str:
+    """The overview's parts in page order; each part with content gets a sidebar entry."""
     if not ov:
         return ""
-    def bullets(items):
-        return "".join(f"<li>{i}</li>" for i in items)
-    def stat(prefix):
-        fs = [f for g in groups for f in g["files"] if f["path"].startswith(prefix)]
-        return f'<span class="plus">+{sum(f["add"] for f in fs)}</span> <span class="minus">−{sum(f["rem"] for f in fs)}</span>'
-    for key in ("summary", "before", "after", "decisions"):
-        if isinstance(ov.get(key), str):
-            sys.exit(f"overview.{key} must be a list of HTML strings, not one string")
-    parts = ['<section class="overview" id="overview"><h2>Overview</h2>']
-    if ov.get("summary"):
-        parts.append('<div class="ov-summary">' + "".join(f"<p>{p}</p>" for p in ov["summary"]) + "</div>")
-    if ov.get("before") or ov.get("after"):
-        parts.append('<div class="ov-ba">'
-                     f'<div class="ov-card before"><h3>Before</h3><ul>{bullets(ov.get("before", []))}</ul></div>'
-                     f'<div class="ov-card after"><h3>After</h3><ul>{bullets(ov.get("after", []))}</ul></div></div>')
-    if ov.get("graph"):
-        arch = {"graph": ov["graph"], "caption": ov.get("diagram_caption")}
-        parts.append(f'<div><h3>Architecture</h3><div class="ov-diagram">{render_flow("overview", arch)}</div></div>')
-    parts += [overview_flows(heading, ov.get(key, [])) for heading, key in (("Data flow", "data_flow"), ("State", "state"))]
-    if ov.get("layout"):
-        rows = "".join(
-            f'<tr><td class="p"><a href="#{r["group"]}">{html.escape(r["path"])}</a></td><td>{r["role"]}</td><td class="s">{stat(r["path"])}</td></tr>'
-            for r in ov["layout"])
-        parts.append(f'<div><h3>Code layout</h3><div class="ov-layout"><table><thead><tr><th>Where</th><th>What it does in this PR</th><th>Lines</th></tr></thead><tbody>{rows}</tbody></table></div></div>')
-    if ov.get("decisions"):
-        parts.append(f'<div><h3>Key decisions</h3><ul class="ov-decisions">{bullets(ov["decisions"])}</ul></div>')
-    parts.append("</section>")
-    return "".join(parts)
+    return ('<section class="overview" id="overview"><h2>Overview</h2>'
+            + "".join(part(ov) for part in OVERVIEW_PARTS) + "</section>")
 
 def compact(n: int) -> str:
     for size, suffix in ((1_000_000, "M"), (1_000, "k")):

@@ -40,7 +40,48 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 | `state` | A list of flows `{title, machine, caption}`: the main state machines the change touches. Shown under "State". See "State machines". |
 | `data_flow` | A list of flows, each `{title, sequence or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey, usually a `sequence`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
-| `decisions` | HTML bullets for design decisions. Mark the ones the user made with `<em>(your call)</em>`. |
+| `decisions` | Design decisions as `{impact, text}`, shown grouped by impact, highest first. `impact` is `High`, `Medium` or `Low` (see "Decision impact"). `text` is HTML. Mark the ones the user made with `<em>(your call)</em>`. |
+| `metrics` | Every metric the PR adds, modifies or removes: logs, OpenTelemetry (oTel) metrics and spans, analytics events. See "Metrics and flags". `[]` shows "No metric changes". The builder warns when the key is missing. |
+| `flags` | Every feature flag the PR adds, modifies or removes. See "Metrics and flags". `[]` shows "No feature flags". The builder warns when the key is missing. |
+
+Each overview part (summary, before and after, architecture, data flow, state, code
+layout, key decisions, metrics, feature flags) that has content gets its own entry under
+Overview in the sidebar.
+
+### Decision impact
+
+- **High:** shapes behaviour users see, or is hard to reverse: a public API or data
+  contract, a schema, what counts as an error.
+- **Medium:** a real trade-off with limited reach, such as a default, a threshold or a
+  library choice.
+- **Low:** local choices that are easy to change later, such as naming or file layout.
+
+### Metrics and flags
+
+```json
+"metrics": [
+  {"name": "Draft_Saved", "change": "Added", "where": "Amplitude event", "file": "src/drafts/useSaveDraft.ts",
+   "tracks": "Each successful save, with <code>draftId</code> and <code>attempt</code>.",
+   "why": "Shows how often the new retry path saves a draft that would have failed."}
+],
+"flags": [
+  {"name": "drafts_autosave", "code": "FLAGS.draftsAutosave", "change": "Added", "file": "src/drafts/useAutosave.ts",
+   "gates": "Saving the draft every 5 seconds while the editor is open.",
+   "why": "Rolls autosave out to 10% of users first.",
+   "default": "Off. Saves only on click."}
+]
+```
+
+- Metric: `name` is the exact event, log message, span or metric name. `where` says
+  where it's tracked, such as "Log", "OpenTelemetry metric", "OpenTelemetry span" or
+  "Amplitude event". `tracks` is what it measures, with its properties. `why` says why
+  it's added, modified or removed.
+- Flag: `name` is the exact name in the flag system, such as a Statsig gate. `code` is
+  the identifier in the code, when it differs. `gates` is what turns on with the flag,
+  and `why` says why it's added, modified or removed. `default` is optional: the default
+  state and the behaviour when off.
+- Both: `change` is `Added`, `Modified` or `Removed`. `file` is optional: a link target,
+  usually the file that emits the metric or checks the flag. The name then links there.
 
 ## `groups[]`
 

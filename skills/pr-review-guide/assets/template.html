@@ -126,14 +126,20 @@ details.tests-card > summary::before, details.flow > summary::before { content: 
 details.tests-card[open] > summary::before, details.flow[open] > summary::before { transform: rotate(90deg); }
 details.tests-card > summary .ttl { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--fg); }
 details.tests-card > summary .cnt { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.tests-scroll { overflow-x: auto; border-top: 1px solid var(--line); }
-table.tests { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 980px; font-size: 13px; }
-table.tests th, table.tests td, table.fixtures th, table.fixtures td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-table.tests tr:last-child td, table.fixtures tr:last-child td { border-bottom: none; }
-table.tests th, table.fixtures th { font-weight: 600; color: var(--muted); background: var(--soft); }
-table.tests th { position: relative; }
-table.tests td.tname { font-weight: 500; }
+/* Every data table is a .grid: one look, and columns the reader can drag to resize. */
+.grid-scroll { overflow-x: auto; }
+.grid-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.tests-card .grid-scroll { border-top: 1px solid var(--line); }
+table.grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.grid th, table.grid td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: break-word; }
+table.grid tr:last-child td { border-bottom: none; }
+table.grid th { position: relative; font-weight: 600; color: var(--muted); background: var(--soft); }
+table.grid td.mono { font: 12.5px var(--mono); }
+table.grid td.num { font: 12px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.tests { table-layout: fixed; min-width: 980px; }
+table.tests th, table.tests td { overflow-wrap: anywhere; }
 table.tests .tchg, table.tests .ttype { white-space: normal; max-width: 100%; }
+table.tests td.tname { font-weight: 500; }
 .col-grip { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }
 .col-grip::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: var(--line); }
 .col-grip:hover::after, .col-grip.dragging::after { background: var(--muted); top: 0; bottom: 0; }
@@ -179,10 +185,6 @@ details.flow > summary { list-style: none; cursor: pointer; user-select: none; p
 section.group.done details.flow { border-color: var(--add-gutter); }
 details.flow > summary .count { text-transform: none; letter-spacing: 0; }
 .fixtures-summary { margin: 0; font-size: 13.5px; }
-table.fixtures { border-collapse: collapse; width: 100%; font-size: 13px; }
-table.fixtures th, table.fixtures td { padding: 6px 10px; }
-table.fixtures td.fx-path { font: 12.5px var(--mono); }
-table.fixtures td.fx-size { font: 12px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .sec-chev { border: none; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font: 15px var(--mono); transition: transform .15s; align-self: center; }
 .sec-chev:hover { color: var(--fg); }
@@ -306,14 +308,14 @@ body.dia-lock { overflow: hidden; }
 .rf-frag-else { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); padding: 5px 8px; font-size: 12px; color: var(--muted); }
 .ov-caption { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .ov-flows { display: flex; flex-direction: column; gap: 12px; }
-.ov-layout { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
-.ov-layout table { border-collapse: collapse; width: 100%; font-size: 13px; }
-.ov-layout th, .ov-layout td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.ov-layout tr:last-child td { border-bottom: none; }
-.ov-layout th { font-weight: 600; color: var(--muted); background: var(--soft); }
-.ov-layout td.p { font: 12.5px var(--mono); white-space: nowrap; }
-.ov-layout td.s { font: 12px var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ov-decisions { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; max-width: 90ch; }
+.ov-part { scroll-margin-top: 70px; }
+.ov-dec-level + .ov-dec-level { margin-top: 12px; }
+.ov-dec-level h4 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; font: 500 12px var(--mono); color: var(--muted); }
+.ov-dec-level h4 .imp { padding: 3px 6px; }
+.ov-code { margin-top: 2px; font: 11px var(--mono); color: var(--muted); }
+.ov-empty { margin: 0; color: var(--muted); font-size: 13.5px; }
+.toc-group li.toc-ov a { padding-left: 2px; }
 
 @media (max-width: 960px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
@@ -473,10 +475,19 @@ function renderTests(rows) {
       <td><span class="ttype">${x.type}</span></td>
       <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
   const cols = TEST_COLUMNS.map(([, pct]) => `<col style="width:${pct}%">`).join("");
-  const heads = TEST_COLUMNS.map(([label]) => `<th>${label}<span class="col-grip" role="separator" aria-orientation="vertical" aria-label="Resize ${label} column"></span></th>`).join("");
+  const heads = TEST_COLUMNS.map(([label]) => `<th>${label}</th>`).join("");
   return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
-    <div class="tests-scroll"><table class="tests"><colgroup>${cols}</colgroup><thead><tr>${heads}</tr></thead>
+    <div class="grid-scroll"><table class="grid tests"><colgroup>${cols}</colgroup><thead><tr>${heads}</tr></thead>
     <tbody>${body}</tbody></table></div></details>`;
+}
+
+function makeTablesResizable(root = document) {
+  root.querySelectorAll("table.grid").forEach((table) => {
+    const heads = [...table.querySelectorAll("thead th")];
+    if (!table.querySelector("colgroup")) table.insertAdjacentHTML("afterbegin", `<colgroup>${"<col>".repeat(heads.length)}</colgroup>`);
+    heads.forEach((th) => th.insertAdjacentHTML("beforeend",
+      `<span class="col-grip" role="separator" aria-orientation="vertical" aria-label="Resize the ${esc(th.textContent)} column"></span>`));
+  });
 }
 
 // The first drag pins every column to its rendered pixel width, so widening one column
@@ -486,6 +497,7 @@ function pinColumnWidths(table) {
   const widths = [...table.querySelectorAll("thead th")].map((th) => th.getBoundingClientRect().width);
   cols.forEach((col, i) => { col.style.width = `${widths[i]}px`; });
   table.style.minWidth = "0";
+  table.style.tableLayout = "fixed";
   table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
   return cols;
 }
@@ -591,14 +603,28 @@ function renderMeta() {
     <a href="${PR_URL}" target="_blank" rel="noopener">Open on GitHub ↗</a>`;
 }
 
+// One sidebar group: a numbered heading linking to `id`, and a collapsible list of items when it has any.
+function tocGroup({ id, n, title, items, attrs = "" }) {
+  const chev = items
+    ? `<button class="toc-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(title)} entries">▾</button>`
+    : '<span class="toc-chev spacer" aria-hidden="true">▾</span>';
+  return `<div class="toc-group" ${attrs}><div class="toc-head">${chev}<a href="#${id}"><span class="n">${n}</span>${esc(title)}</a></div>${items ? `<ul>${items}</ul>` : ""}</div>`;
+}
+
+function overviewToc() {
+  const overview = document.getElementById("overview");
+  if (!overview) return "";
+  const items = [...overview.querySelectorAll(".ov-part[data-nav]")]
+    .map((part) => `<li class="toc-ov"><a href="#${part.id}"><span class="name">${esc(part.dataset.nav)}</span></a></li>`).join("");
+  return tocGroup({ id: "overview", n: 0, title: "Overview", items });
+}
+
+const fileTocItem = (f) => `
+  <li data-key="${esc(f.key)}" ${f.test || f.story ? 'data-secondary="1"' : ""}><a href="#${fileId(f.key)}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat">${lineStat(f.add, f.rem)}</span></a></li>`;
+
 function renderToc() {
-  document.getElementById("toc").innerHTML = (document.getElementById("overview") ? '<div class="toc-group"><div class="toc-head"><span class="toc-chev spacer" aria-hidden="true">▾</span><a href="#overview"><span class="n">0</span>Overview</a></div></div>' : "") + GROUPS.map((g, i) => `
-    <div class="toc-group" data-group="${g.id}">
-      <div class="toc-head"><button class="toc-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(g.title)} files">▾</button><a href="#${g.id}"><span class="n">${i + 1}</span>${esc(g.title)}</a></div>
-      <ul>${g.files.map((f) => `
-        <li data-key="${esc(f.key)}" ${f.test || f.story ? 'data-secondary="1"' : ""}><a href="#${fileId(f.key)}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat">${lineStat(f.add, f.rem)}</span></a></li>`).join("")}
-      </ul>
-    </div>`).join("");
+  document.getElementById("toc").innerHTML = overviewToc() + GROUPS.map((g, i) =>
+    tocGroup({ id: g.id, n: i + 1, title: g.title, items: g.files.map(fileTocItem).join(""), attrs: `data-group="${g.id}"` })).join("");
 }
 
 const IMPACTS = ["high", "medium", "low"];
@@ -635,10 +661,10 @@ function renderFixtures(fx) {
   if (!fx) return "";
   const rows = fx.files.map((f) => `<tr>
       <td><span class="pill ${f.status}">${STATUS_LABEL[f.status]}</span></td>
-      <td class="fx-path">${esc(f.path)}</td><td class="fx-size">${fixtureSize(f)}</td><td>${f.note ?? ""}</td></tr>`).join("");
+      <td class="mono">${esc(f.path)}</td><td class="num">${fixtureSize(f)}</td><td>${f.note ?? ""}</td></tr>`).join("");
   return `<details class="flow fixtures-card"><summary>Fixtures <span class="count">${fx.files.length} files · not diffed</span></summary>
     <div class="flow-body">${fx.summary ? `<p class="fixtures-summary">${fx.summary}</p>` : ""}
-    <table class="fixtures"><thead><tr><th>Change</th><th>File</th><th>Size</th><th>What it holds</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+    <div class="grid-scroll"><table class="grid"><thead><tr><th>Change</th><th>File</th><th>Size</th><th>What it holds</th></tr></thead><tbody>${rows}</tbody></table></div></div></details>`;
 }
 
 function renderMain() {
@@ -703,7 +729,9 @@ function bindToolbar() {
   });
   document.getElementById("main").addEventListener("click", (event) => {
     const chev = event.target.closest(".sec-chev");
-    if (chev) { const s = chev.closest("section.group"); setSectionCollapsed(s, !s.classList.contains("collapsed")); }
+    if (chev) { const s = chev.closest("section.group"); setSectionCollapsed(s, !s.classList.contains("collapsed")); return; }
+    const link = event.target.closest("a[data-link]");
+    if (link) { event.preventDefault(); jumpTo(link.dataset.link); }
   });
   document.getElementById("toc").addEventListener("click", (event) => {
     const chev = event.target.closest("button.toc-chev");
@@ -1314,5 +1342,5 @@ function trackToolbarHeight() {
   update();
 }
 
-renderMeta(); renderToc(); renderMain(); bindToolbar(); bindTips(); trackToolbarHeight(); refresh(); renderDiagrams();
+renderMeta(); renderToc(); renderMain(); makeTablesResizable(); bindToolbar(); bindTips(); trackToolbarHeight(); refresh(); renderDiagrams();
 </script>
