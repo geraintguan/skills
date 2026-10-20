@@ -56,9 +56,14 @@ From top to bottom:
    animated, and nodes tagged added, changed or removed get matching colours. State
    machines start in their initial state; clicking a state or one of its events moves
    there, and the transitions out of the current state animate.
-5. **Tables.** Every table (code layout, API, metrics, feature flags, tests and fixtures)
+5. **Icons and tooltips.** Impact, change type and test type pills, status chips and
+   headings carry a fixed emoji, so the page scans by shape. Every pill, badge, toolbar
+   button and diagram button explains itself in a tooltip on hover or keyboard focus,
+   and glossary terms written as `<abbr title>` show their definition the same way.
+   Each file header has a 📋 button that copies its path.
+6. **Tables.** Every table (code layout, API, metrics, feature flags, tests and fixtures)
    shares one style, and readers can drag a column's edge to resize it.
-6. **Sidebar and toolbar.** The sidebar lists the overview's parts and every file, has
+7. **Sidebar and toolbar.** The sidebar lists the overview's parts and every file, has
    collapsible sections, and shows progress. The toolbar has hide tests/stories, hide line notes, and expand or
    collapse all.
 
@@ -189,7 +194,9 @@ The parts, in the order to write them:
   file under it. Don't describe a fixture's lines: the reader won't see them.
 
 Define library and framework terms in one clause the first time they appear, for
-example "RTK Query cache". Readers ask.
+example "RTK Query cache", and wrap them in `<abbr title="…">` so the definition is a
+hover away wherever the term appears. Readers ask. Lead items with a signpost emoji
+where it helps, such as ⚠️ for a risk or 🐛 for a bug fix (see `references/config.md`).
 
 Write for a person reading the page, not for a parser. Follow the readability rules in
 `references/config.md`: one idea per paragraph, item or note, short sentences, plain

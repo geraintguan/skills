@@ -40,7 +40,7 @@ diagram). All four are JSON, drawn with [React Flow](https://reactflow.dev/). Se
 | `state` | A list of flows `{title, machine, caption}`: the main state machines the change touches. Shown under "State". See "State machines". |
 | `data_flow` | A list of flows, each `{title, sequence or graph or machine, caption}`. The high-level data flow across the whole change, one flow per main journey, usually a `sequence`. `title` and `caption` are optional HTML. See "Data flow". |
 | `layout` | `[{path, role, group}]`. `path` is a file or directory prefix. The builder sums the +/− lines under it. `role` says what that path does in this PR. `group` is a section `id`, used for the link. |
-| `decisions` | Design decisions as `{area, impact, text}`, grouped by area and then by impact, highest first. `area` is the part of the system or concern the decision touches, as HTML, such as `Error handling` or `The <code>users</code> table`; reuse the exact same string for every decision in that area. Areas with a High decision come first. `impact` is `High`, `Medium` or `Low` (see "Decision impact"). `text` is HTML. Mark the ones the user made with `<em>(your call)</em>`. |
+| `decisions` | Design decisions as `{area, impact, text}`, grouped by area and then by impact, highest first. `area` is the part of the system or concern the decision touches, as HTML, such as `Error handling` or `The <code>users</code> table`; reuse the exact same string for every decision in that area. Areas with a High decision come first. `impact` is `High`, `Medium` or `Low` (see "Decision impact"). `text` is HTML. Mark the ones the user made with `<em>🙋 (your call)</em>`. |
 | `api` | Every API endpoint the PR adds, modifies or removes. See "API endpoints". `[]` shows "No API changes". The builder warns when the key is missing. |
 | `metrics` | Every metric the PR adds, modifies or removes: logs, OpenTelemetry (oTel) metrics and spans, analytics events. See "Metrics and flags". `[]` shows "No metric changes". The builder warns when the key is missing. |
 | `flags` | Every feature flag the PR adds, modifies or removes. See "Metrics and flags". `[]` shows "No feature flags". The builder warns when the key is missing. |
@@ -444,7 +444,15 @@ A person reads this, often between other work. Make every part easy to take in.
   branch.
 - Lead with the point. Use short sentences, active voice and real names.
 - Keep technical terms, and define a library or domain term in one clause the first
-  time it appears.
+  time it appears. Wrap the term in `<abbr title="…">` with a one-sentence definition,
+  such as `<abbr title="RTK Query's store of fetched data, keyed by endpoint and arguments">RTK Query cache</abbr>`.
+  The page shows it as a dotted term with a tooltip, on hover and keyboard focus. Use
+  it in any HTML field, and again wherever a later reader might have skipped the first
+  definition.
+- Use emojis as signposts, at most one per item, at the start: ⚠️ a risk or gap, 🐛 a
+  bug fix, 🔒 auth or permissions, ⚡ performance, 💥 a breaking change, 🧪 test-only,
+  🧹 cleanup, 🗄️ data or schema, 🎨 UI. Don't use them as decoration, and don't repeat
+  the ones the page adds itself (impact, change type and test type pills, and headings).
 - Prefer plain words to jargon. When jargon is the right word, define it once.
 - Use the same name for the same thing everywhere: in titles, notes, diagrams and tests.
 - Never claim something you haven't checked in the code. When unsure, read the file.
