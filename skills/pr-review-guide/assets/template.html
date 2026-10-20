@@ -12,6 +12,7 @@
 <style>
 /* Layout: sticky review checklist on the left, grouped file diffs on the right; one column on phones. */
 :root {
+  --imp-w: 88px;
   --bg: #12151b; --panel: #191d25; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2a303b; --soft: #20252e;
   --accent: #7ea2ff; --accent-soft: #232d45;
   --add-bg: #14281c; --add-gutter: #1b3826; --add-fg: #6fd391;
@@ -167,7 +168,7 @@ body.hide-notes tr.anno, body.hide-notes .fnote { display: none; }
 .chg-type > summary .count, details.flow > summary .count { color: var(--muted); font-weight: 500; }
 .chg-type.added > summary { color: var(--add-fg); } .chg-type.modified > summary { color: var(--hunk-fg); } .chg-type.deleted > summary { color: var(--del-fg); }
 .chg-type ul { list-style: none; margin: 6px 0 2px; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 6px; }
-.chg-type li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.chg-type li { display: grid; grid-template-columns: var(--imp-w) minmax(0, 1fr); gap: 10px; align-items: baseline; }
 .imp { font: 600 10px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 0; border-radius: 4px; text-align: center; }
 .imp.high { color: var(--imp-high); background: var(--imp-high-bg); }
 .imp.medium { color: var(--imp-med); background: var(--imp-med-bg); }
@@ -175,7 +176,7 @@ body.hide-notes tr.anno, body.hide-notes .fnote { display: none; }
 .imp-sum { display: inline-flex; gap: 4px; margin-left: 4px; }
 .imp-sum .imp { padding: 3px 6px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; color: var(--muted); font-size: 13px; }
-.legend .imp { display: inline-block; width: 64px; margin-right: 4px; }
+.legend .imp { display: inline-block; width: var(--imp-w); margin-right: 4px; }
 section.group.done .changes { background: var(--add-bg); border-color: var(--add-gutter); }
 
 details.flow { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-width: 96ch; }
@@ -321,6 +322,17 @@ body.dia-lock { overflow: hidden; }
 .ov-empty { margin: 0; color: var(--muted); font-size: 13.5px; }
 .toc-group li.toc-ov a { padding-left: 2px; }
 
+/* Icons: every pill, badge and heading of one kind gets the same emoji, so the page scans by shape. Pill icons come from PILL_KINDS. */
+.ico { font-style: normal; margin-right: .3em; }
+.changes .lead::before { content: "👉"; margin-right: .4em; }
+/* Glossary terms: dotted like the diagram links, with their definition in the page tooltip. */
+abbr[data-tip] { text-decoration: underline dotted var(--accent); text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+abbr[data-tip]:hover { background: var(--accent-soft); }
+.has-tip { cursor: help; }
+.dia-tip-body { white-space: pre-line; }
+.copy { margin-left: 4px; vertical-align: 1px; border: none; background: none; cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 13px; line-height: 1; opacity: .6; }
+.copy:hover, .copy:focus-visible { opacity: 1; background: var(--panel); }
+
 @media (max-width: 960px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   nav.toc { position: static; max-height: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
@@ -336,22 +348,23 @@ body.dia-lock { overflow: hidden; }
     <div class="meta" id="meta"></div>
     <p class="lede">__LEDE__</p>
     <div class="legend"><span><span class="imp high">High</span>user-visible behaviour or logic that's easy to get wrong</span><span><span class="imp medium">Medium</span>real logic change with limited reach</span><span><span class="imp low">Low</span>mechanical: renames, imports, tests, stories, copy</span></div>
-    <div class="legend"><span><b>Test types:</b></span><span><span class="ttype">Unit</span> calls a pure function, renders nothing</span><span><span class="ttype">Integration</span> renders components (Testing Library in jsdom, or a Storybook play function in Chromium)</span><span><span class="ttype">E2E</span> drives the running app (Playwright)</span></div>
+    <div class="legend"><span><b>Test types:</b></span><span><span class="ttype Unit">Unit</span> calls a pure function, renders nothing</span><span><span class="ttype Integration">Integration</span> renders components (Testing Library in jsdom, or a Storybook play function in Chromium)</span><span><span class="ttype E2E">E2E</span> drives the running app (Playwright)</span></div>
+    <div class="legend"><span>💡 Hover or focus any pill, badge, button or <abbr data-tip="Terms with a dotted underline explain themselves on hover. Try the others in this guide." data-tip-label="Glossary term">dotted term</abbr> to see what it means.</span></div>
   </header>
 
   <div class="lib-warning" id="diagram-warning" role="alert" hidden>
-    <p><b>Some diagrams didn't load, or aren't interactive.</b> This guide loads its diagram libraries (React, React Flow and dagre) from a CDN, pinned to the versions it was built with, and those versions no longer work together here. Regenerate the guide with the latest pr-review-guide skill to fix it.</p>
+    <p><b>⚠️ Some diagrams didn't load, or aren't interactive.</b> This guide loads its diagram libraries (React, React Flow and dagre) from a CDN, pinned to the versions it was built with, and those versions no longer work together here. Regenerate the guide with the latest pr-review-guide skill to fix it.</p>
     <ul></ul>
   </div>
 
   <div class="toolbar">
-    <span class="progress" id="progress">0 of 0 reviewed</span>
+    <span class="progress has-tip" id="progress" tabindex="0">✅ 0 of 0 reviewed</span>
     <span class="bar" aria-hidden="true"><i id="barfill"></i></span>
     <span class="grow"></span>
-    <button class="btn" id="tgl-tests" aria-pressed="false" type="button">Hide tests and stories</button>
-    <button class="btn" id="tgl-notes" aria-pressed="false" type="button">Hide line notes</button>
-    <button class="btn" id="expand-all" type="button">Expand all</button>
-    <button class="btn" id="collapse-all" type="button">Collapse all</button>
+    <button class="btn" id="tgl-tests" aria-pressed="false" type="button" data-tip="Hide test and Storybook files, and leave them out of the progress count.">🙈 Hide tests and stories</button>
+    <button class="btn" id="tgl-notes" aria-pressed="false" type="button" data-tip="Hide the notes on specific diff lines and the About this file notes.">💬 Hide line notes</button>
+    <button class="btn" id="expand-all" type="button" data-tip="Open every section and file, including reviewed ones.">📂 Expand all</button>
+    <button class="btn" id="collapse-all" type="button" data-tip="Close every section and file, leaving only the headings.">📁 Collapse all</button>
   </div>
 
   <div class="layout">
@@ -363,6 +376,7 @@ body.dia-lock { overflow: hidden; }
 <script>
 const GROUPS = /*__DATA__*/null;
 const META_EXTRA = /*__META__*/[];
+const ICONS = /*__ICONS__*/{};
 const PR_URL = "__PR_URL__";
 const STORE_KEY = "__STORE_KEY__";
 const COLLAPSE_LINES = 400;
@@ -433,7 +447,7 @@ function parseDiff(body) {
 
 function annotationRow(note) {
   const imp = note.impact ? `<span class="imp ${note.impact.toLowerCase()}">${note.impact}</span>` : "";
-  return `<tr class="anno"><td colspan="4"><div class="anno-box"><span class="who">Note</span>${imp}<span>${note.text}</span></div></td></tr>`;
+  return `<tr class="anno"><td colspan="4"><div class="anno-box"><span class="who">💬 Note</span>${imp}<span>${note.text}</span></div></td></tr>`;
 }
 
 function renderDiffRows(file) {
@@ -461,6 +475,14 @@ function renderDiffRows(file) {
 }
 
 const STATUS_LABEL = { A: "Added", D: "Deleted", M: "Modified" };
+const KIND_PILLS = {
+  test: '<span class="pill kind" data-tip="A test file. 🙈 in the toolbar hides test and story files.">🧪 Test</span>',
+  story: '<span class="pill kind" data-tip="A Storybook story file. 🙈 in the toolbar hides test and story files.">📖 Story</span>',
+};
+const COPY_TIP = "Copy this file's path";
+const COPY_ICON = "📋";
+const fileKind = (f) => (f.test ? "test" : f.story ? "story" : "");
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const lineStat = (add, rem) => `<span class="plus">+${add}</span> <span class="minus">−${rem}</span>`;
 
 function splitPath(path) { const i = path.lastIndexOf("/"); return [path.slice(0, i + 1), path.slice(i + 1)]; }
@@ -476,12 +498,12 @@ function renderTests(rows) {
     .map(([c, n]) => `${n} ${c.toLowerCase()}`).join(" · ");
   const body = tests.map((x) => `<tr>
       <td><span class="tchg ${x.change}">${x.change}</span></td>
-      <td class="tname" title="${esc(x.name)}">${x.summary}</td>
-      <td><span class="ttype">${x.type}</span></td>
+      <td class="tname has-tip" data-tip-label="Test name" data-tip="${esc(x.name)}">${x.summary}</td>
+      <td><span class="ttype ${x.type}">${x.type}</span></td>
       <td>${x.inputs}</td><td>${x.expected}</td><td>${x.why}</td></tr>`).join("");
   const cols = TEST_COLUMNS.map(([, pct]) => `<col style="width:${pct}%">`).join("");
   const heads = TEST_COLUMNS.map(([label]) => `<th>${label}</th>`).join("");
-  return `<details class="tests-card"><summary><span class="ttl">Tests</span><span class="cnt">${counts}</span></summary>
+  return `<details class="tests-card"><summary><span class="ttl">🧪 Tests</span><span class="cnt">${counts}</span></summary>
     <div class="grid-scroll"><table class="grid tests"><colgroup>${cols}</colgroup><thead><tr>${heads}</tr></thead>
     <tbody>${body}</tbody></table></div></details>`;
 }
@@ -491,7 +513,7 @@ function makeTablesResizable(root = document) {
     const heads = [...table.querySelectorAll("thead th")];
     if (!table.querySelector("colgroup")) table.insertAdjacentHTML("afterbegin", `<colgroup>${"<col>".repeat(heads.length)}</colgroup>`);
     heads.forEach((th) => th.insertAdjacentHTML("beforeend",
-      `<span class="col-grip" role="separator" aria-orientation="vertical" aria-label="Resize the ${esc(th.textContent)} column"></span>`));
+      `<span class="col-grip" role="separator" aria-orientation="vertical" aria-label="Resize the ${esc(th.textContent)} column" data-tip="↔️ Drag to resize the ${esc(th.textContent)} column"></span>`));
   });
 }
 
@@ -535,22 +557,22 @@ function fileCard(file) {
   const [dir, base] = splitPath(file.path);
   const el = document.createElement("article");
   el.className = "file"; el.id = fileId(file.key);
-  if (file.test || file.story) el.dataset.secondary = "1";
-  const kind = file.test ? '<span class="pill kind">Test</span>' : file.story ? '<span class="pill kind">Story</span>' : "";
+  if (fileKind(file)) el.dataset.secondary = "1";
+  const kind = KIND_PILLS[fileKind(file)] ?? "";
   el.innerHTML = `
     <div class="fhead">
       <button class="chev" type="button" aria-label="Toggle ${esc(base)}" aria-expanded="true">▾</button>
       <span class="pill ${file.status}">${STATUS_LABEL[file.status]}</span>${kind}
-      <span class="fpath"><span class="dir">${esc(dir)}</span>${esc(base)}</span>
-      ${file.parts > 1 ? `<span class="pill kind">Part ${file.part} of ${file.parts}</span>` : ""}
-      <span class="fstat">${lineStat(file.add, file.rem)}</span>
-      ${(file.lines || []).length ? `<span class="note-count">${file.lines.length} line note${file.lines.length === 1 ? "" : "s"}</span>` : ""}
-      <a class="fstat" href="${PR_URL}/files" target="_blank" rel="noopener">GitHub ↗</a>
-      <label class="rev"><input type="checkbox" id="rev-${el.id}"> Reviewed</label>
+      <span class="fpath"><span class="dir">${esc(dir)}</span>${esc(base)}<button class="copy" type="button" data-copy="${esc(file.path)}" data-tip="${COPY_TIP}" aria-label="Copy the path of ${esc(base)}">${COPY_ICON}</button></span>
+      ${file.parts > 1 ? `<span class="pill kind" data-tip="This file's changes belong to more than one step of the story, so its hunks are split across sections.">🧩 Part ${file.part} of ${file.parts}</span>` : ""}
+      <span class="fstat has-tip" data-tip="Lines added and removed in this part of the diff.">${lineStat(file.add, file.rem)}</span>
+      ${(file.lines || []).length ? `<span class="note-count" data-tip="Notes on specific lines in the diff below. 💬 in the toolbar hides them.">💬 ${plural(file.lines.length, "line note")}</span>` : ""}
+      <a class="fstat" href="${PR_URL}/files" target="_blank" rel="noopener" data-tip="Open the PR's Files changed tab on GitHub, to comment on a line.">🐙 GitHub ↗</a>
+      <label class="rev" data-tip="Tick once you've reviewed this file. It collapses, and your progress is saved in this browser."><input type="checkbox" id="rev-${el.id}"> Reviewed</label>
     </div>
     <div class="fbody"></div>`;
   const body = el.querySelector(".fbody");
-  const preamble = (file.note ? `<div class="fnote"><span class="who">About this file</span><span>${file.note}</span></div>` : "") + renderTests(file.test_rows);
+  const preamble = (file.note ? `<div class="fnote"><span class="who">📝 About this file</span><span>${file.note}</span></div>` : "") + renderTests(file.test_rows);
   const rows = renderDiffRows(file);
   if (!rows.length) body.innerHTML = preamble + '<div class="empty-diff">No text changes.</div>';
   else {
@@ -559,8 +581,8 @@ function fileCard(file) {
       body.innerHTML = preamble + table(rows.slice(0, COLLAPSE_LINES));
       const more = document.createElement("button");
       more.type = "button"; more.className = "showmore";
-      more.textContent = `Show the remaining ${rows.length - COLLAPSE_LINES} lines`;
-      more.onclick = () => { body.querySelector("table.diff tbody").insertAdjacentHTML("beforeend", rows.slice(COLLAPSE_LINES).join("")); more.remove(); };
+      more.textContent = `⬇️ Show the remaining ${rows.length - COLLAPSE_LINES} lines`;
+      more.onclick = () => { const tbody = body.querySelector("table.diff tbody"); tbody.insertAdjacentHTML("beforeend", rows.slice(COLLAPSE_LINES).join("")); promoteTerms(tbody); more.remove(); };
       body.appendChild(more);
     } else body.innerHTML = preamble + table(rows);
   }
@@ -601,11 +623,11 @@ function setSectionCollapsed(section, collapsed) {
 function renderMeta() {
   const add = allFiles.reduce((s, f) => s + f.add, 0), rem = allFiles.reduce((s, f) => s + f.rem, 0);
   document.getElementById("meta").innerHTML = `
-    <span><b>${allFiles.length}</b> files shown</span>
-    <span><b class="plus">+${add}</b> <b class="minus">−${rem}</b></span>
-    ${allFixtures.length ? `<span title="Test and eval data, listed without diffs"><b>${allFixtures.length}</b> fixture${allFixtures.length === 1 ? "" : "s"} listed, not diffed</span>` : ""}
+    <span class="has-tip" data-tip="Files with a diff in this guide. Generated and bulk files the guide skips aren't counted.">📄 <b>${allFiles.length}</b> files shown</span>
+    <span class="has-tip" data-tip="Lines added and removed across the files shown.">🧮 <b class="plus">+${add}</b> <b class="minus">−${rem}</b></span>
+    ${allFixtures.length ? `<span class="has-tip" data-tip="Test and eval data, such as sample documents. Each is listed with a summary in its section, without a diff.">📦 <b>${allFixtures.length}</b> fixture${allFixtures.length === 1 ? "" : "s"} listed, not diffed</span>` : ""}
     ${META_EXTRA.map((m) => `<span>${m}</span>`).join("")}
-    <a href="${PR_URL}" target="_blank" rel="noopener">Open on GitHub ↗</a>`;
+    <a href="${PR_URL}" target="_blank" rel="noopener" data-tip="Open the pull request on GitHub.">🐙 Open on GitHub ↗</a>`;
 }
 
 // One sidebar group: a numbered heading linking to `id`, and a collapsible list of items when it has any.
@@ -620,12 +642,12 @@ function overviewToc() {
   const overview = document.getElementById("overview");
   if (!overview) return "";
   const items = [...overview.querySelectorAll(".ov-part[data-nav]")]
-    .map((part) => `<li class="toc-ov"><a href="#${part.id}"><span class="name">${esc(part.dataset.nav)}</span></a></li>`).join("");
-  return tocGroup({ id: "overview", n: 0, title: "Overview", items });
+    .map((part) => `<li class="toc-ov"><a href="#${part.id}"><span class="name"><span class="ico">${part.dataset.icon ?? ""}</span>${esc(part.dataset.nav)}</span></a></li>`).join("");
+  return tocGroup({ id: "overview", n: 0, title: `<span class="ico">${ICONS.overview}</span>Overview`, items });
 }
 
 const fileTocItem = (f) => `
-  <li data-key="${esc(f.key)}" ${f.test || f.story ? 'data-secondary="1"' : ""}><a href="#${fileId(f.key)}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat">${lineStat(f.add, f.rem)}</span></a></li>`;
+  <li data-key="${esc(f.key)}" ${fileKind(f) ? 'data-secondary="1"' : ""}><a href="#${fileId(f.key)}" data-tip-label="${esc(f.path)}" data-tip="${[STATUS_LABEL[f.status], fileKind(f)].filter(Boolean).join(" ")} · +${f.add} −${f.rem}"><span class="tick">✓</span><span class="name">${esc(splitPath(f.path)[1])}</span><span class="stat">${lineStat(f.add, f.rem)}</span></a></li>`;
 
 function renderToc() {
   document.getElementById("toc").innerHTML = overviewToc() + GROUPS.map((g, i) =>
@@ -638,13 +660,13 @@ const allChanges = (g) => CHANGE_TYPES.flatMap(([key]) => g.changes[key] || []);
 
 function impactSummary(g) {
   const counts = IMPACTS.map((level) => [level, allChanges(g).filter((c) => c.impact.toLowerCase() === level).length]);
-  return `<span class="imp-sum">${counts.filter(([, n]) => n).map(([level, n]) => `<span class="imp ${level}" title="${n} ${level}-impact changes">${n} ${level}</span>`).join("")}</span>`;
+  return `<span class="imp-sum">${counts.filter(([, n]) => n).map(([level, n]) => `<span class="imp ${level}" data-tip="${plural(n, `${level}-impact change`)} in this section.">${n} ${level}</span>`).join("")}</span>`;
 }
 
 function renderChanges(g) {
   const types = CHANGE_TYPES.filter(([key]) => (g.changes[key] || []).length).map(([key, label]) => {
     const items = [...g.changes[key]].sort((a, b) => IMPACTS.indexOf(a.impact.toLowerCase()) - IMPACTS.indexOf(b.impact.toLowerCase()));
-    return `<details class="chg-type ${key}" open><summary>${label} <span class="count">${items.length}</span></summary><ul>${items.map((c) =>
+    return `<details class="chg-type ${key}" open><summary><span class="lbl">${label}</span> <span class="count">${items.length}</span></summary><ul>${items.map((c) =>
       `<li><span class="imp ${c.impact.toLowerCase()}">${c.impact}</span><span>${c.text}</span></li>`).join("")}</ul></details>`;
   });
   return `<div class="changes">${g.lead ? `<p class="lead">${g.lead}</p>` : ""}${types.join("")}</div>`;
@@ -667,7 +689,7 @@ function renderFixtures(fx) {
   const rows = fx.files.map((f) => `<tr>
       <td><span class="pill ${f.status}">${STATUS_LABEL[f.status]}</span></td>
       <td class="mono">${esc(f.path)}</td><td class="num">${fixtureSize(f)}</td><td>${f.note ?? ""}</td></tr>`).join("");
-  return `<details class="flow fixtures-card"><summary>Fixtures <span class="count">${fx.files.length} files · not diffed</span></summary>
+  return `<details class="flow fixtures-card"><summary>📦 Fixtures <span class="count">${fx.files.length} files · not diffed</span></summary>
     <div class="flow-body">${fx.summary ? `<p class="fixtures-summary">${fx.summary}</p>` : ""}
     <div class="grid-scroll"><table class="grid"><thead><tr><th>Change</th><th>File</th><th>Size</th><th>What it holds</th></tr></thead><tbody>${rows}</tbody></table></div></div></details>`;
 }
@@ -679,11 +701,11 @@ function renderMain() {
     s.className = "group"; s.id = g.id;
     const add = g.files.reduce((a, f) => a + f.add, 0), rem = g.files.reduce((a, f) => a + f.rem, 0);
     s.innerHTML = `<div class="group-head">
-        <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(plainText(g.title))}">▾</button><span class="n">${i + 1}</span><span class="sec-title">${g.title}</span> <span class="n">${g.files.length} files · ${lineStat(add, rem)}</span>${g.changes ? impactSummary(g) : ""}<span class="sec-done">Section reviewed</span></h2>
+        <h2><button class="sec-chev" type="button" aria-expanded="true" aria-label="Show or hide ${esc(plainText(g.title))}">▾</button><span class="n">${i + 1}</span><span class="sec-title">${g.title}</span> <span class="n">${g.files.length} files · ${lineStat(add, rem)}</span>${g.changes ? impactSummary(g) : ""}<span class="sec-done" data-tip="Every file in this section is ticked, so it collapsed. Click its caret to reopen it.">✅ Section reviewed</span></h2>
         ${g.bridge ? `<p class="bridge">${g.bridge}</p>` : ""}
         ${g.changes ? renderChanges(g) : `<ul class="notes">${(g.note || []).map((n) => `<li>${n}</li>`).join("")}</ul>`}
-        ${g.data_flow ? `<details class="flow" open><summary>Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}
-        ${g.state ? `<details class="flow" open><summary>State</summary><div class="flow-body">${g.state}</div></details>` : ""}
+        ${g.data_flow ? `<details class="flow" open><summary>${ICONS["data-flow"]} Data flow</summary><div class="flow-body">${g.data_flow}</div></details>` : ""}
+        ${g.state ? `<details class="flow" open><summary>${ICONS.state} State</summary><div class="flow-body">${g.state}</div></details>` : ""}
         ${renderFixtures(g.fixtures)}
       </div>`;
     g.files.forEach((f) => s.appendChild(fileCard(f)));
@@ -691,10 +713,17 @@ function renderMain() {
   });
 }
 
+function progressTip(remaining) {
+  const sections = [...sectionComplete.values()].filter(Boolean).length;
+  const left = remaining ? `${plural(remaining, "file")} to go` : "🎉 every file reviewed";
+  return `${sections} of ${GROUPS.length} sections done · ${left}. Progress is saved in this browser.`;
+}
+
 function refresh() {
-  const visible = allFiles.filter((f) => !(hideSecondary && (f.test || f.story)));
+  const visible = allFiles.filter((f) => !(hideSecondary && fileKind(f)));
   const done = visible.filter((f) => reviewed.has(f.key)).length;
-  document.getElementById("progress").textContent = `${done} of ${visible.length} reviewed`;
+  const progress = document.getElementById("progress");
+  progress.textContent = `✅ ${done} of ${visible.length} reviewed`;
   document.getElementById("barfill").style.width = visible.length ? `${(100 * done) / visible.length}%` : "0";
   document.querySelectorAll("#toc li").forEach((li) => {
     li.classList.toggle("done", reviewed.has(li.dataset.key));
@@ -712,6 +741,7 @@ function refresh() {
     tocGroup?.classList.toggle("done", complete);
     if (tocGroup && complete && !wasComplete) setTocCollapsed(tocGroup, true);
   }
+  progress.dataset.tip = progressTip(visible.length - done);
 }
 
 function bindToolbar() {
@@ -736,7 +766,9 @@ function bindToolbar() {
     const chev = event.target.closest(".sec-chev");
     if (chev) { const s = chev.closest("section.group"); setSectionCollapsed(s, !s.classList.contains("collapsed")); return; }
     const link = event.target.closest("a[data-link]");
-    if (link) { event.preventDefault(); jumpTo(link.dataset.link); }
+    if (link) { event.preventDefault(); jumpTo(link.dataset.link); return; }
+    const copy = event.target.closest("button.copy");
+    if (copy) copyPath(copy, event.clientX, event.clientY);
   });
   document.getElementById("toc").addEventListener("click", (event) => {
     const chev = event.target.closest("button.toc-chev");
@@ -774,7 +806,7 @@ function reportDiagramProblem(what, err) {
 }
 
 function showDiagramFailed(el) {
-  el.innerHTML = '<p class="dia-failed">This diagram couldn\'t be drawn. See the warning at the top of the page.</p>';
+  el.innerHTML = '<p class="dia-failed">⚠️ This diagram couldn\'t be drawn. See the warning at the top of the page.</p>';
 }
 
 const cssVars = new Map();
@@ -807,6 +839,8 @@ function placeTip(x, y) {
   tipBox.style.top = `${y + 18 + h > innerHeight ? Math.max(8, y - h - 12) : y + 18}px`;
 }
 
+let tipEl = null;
+
 function showTip({ kind, label, tip, hint }, x, y) {
   const lines = [["dia-tip-head", [kind, label].filter(Boolean).join(" · ")], ["dia-tip-body", tip], ["dia-tip-hint", hint]];
   tipBox.replaceChildren(...lines.filter(([, text]) => text).map(([className, textContent]) => Object.assign(document.createElement("div"), { className, textContent })));
@@ -814,19 +848,79 @@ function showTip({ kind, label, tip, hint }, x, y) {
   placeTip(x, y);
 }
 
-const hideTip = () => { tipBox.hidden = true; };
-const tipTarget = (el) => el?.closest?.("[data-tip-kind]");
-const tipOf = (el) => ({ kind: el.dataset.tipKind, label: el.dataset.tipLabel, tip: el.dataset.tip, hint: el.dataset.tipHint });
+const hideTip = () => { tipBox.hidden = true; tipEl = null; };
 
-// Elements carry their tooltip in data attributes, so one set of listeners covers every diagram.
+// Pills and badges of one kind share an icon and a tooltip, so they explain themselves wherever they appear.
+const PILL_KINDS = [
+  [".imp.high", "🔥", "High impact", "User-visible behaviour, or logic that's easy to get wrong. Read these closely."],
+  [".imp.medium", "⚠️", "Medium impact", "A real logic change with limited reach."],
+  [".imp.low", "🧹", "Low impact", "Mechanical: renames, imports, tests, stories or copy."],
+  [".pill.A, .tchg.Added, .dia-chip.added, .chg-type.added .lbl", "✨", "Added", "New in this PR."],
+  [".pill.M, .tchg.Modified, .dia-chip.changed, .chg-type.modified .lbl", "✏️", "Modified", "Exists before this PR, and this PR changes it."],
+  [".pill.D, .tchg.Removed, .dia-chip.removed, .chg-type.deleted .lbl", "🗑️", "Deleted or removed", "This PR deletes it."],
+  [".ttype.Unit", "🧪", "Unit test", "Calls a pure function and renders nothing."],
+  [".ttype.Integration", "🧩", "Integration test", "Renders components, with Testing Library in jsdom or a Storybook play function in Chromium."],
+  [".ttype.E2E", "🌐", "End-to-end test", "Drives the running app, with Playwright."],
+];
+const pillIconRule = ([selector, icon]) => `${selector.split(", ").map((s) => `${s}::before`).join(", ")} { content: "${icon}"; margin-right: .35em; }`;
+document.head.append(Object.assign(document.createElement("style"), { textContent: PILL_KINDS.map(pillIconRule).join("\n") }));
+const DEFAULT_TIP_SELECTOR = PILL_KINDS.map(([selector]) => selector).join(", ");
+const TIP_SELECTOR = `[data-tip], ${DEFAULT_TIP_SELECTOR}`;
+const tipTarget = (el) => el?.closest?.(TIP_SELECTOR);
+
+function tipOf(el) {
+  if ("tip" in el.dataset) return { kind: el.dataset.tipKind, label: el.dataset.tipLabel, tip: el.dataset.tip, hint: el.dataset.tipHint };
+  const [, icon, label, tip] = PILL_KINDS.find(([selector]) => el.matches(selector));
+  return { label: `${icon} ${label}`, tip };
+}
+
+// Authors write glossary terms as <abbr title="…">; the page tooltip replaces the slow native one.
+function promoteTerms(root) {
+  root.querySelectorAll("abbr[title]").forEach((abbr) => {
+    Object.assign(abbr.dataset, { tip: abbr.title, tipLabel: abbr.textContent });
+    abbr.removeAttribute("title");
+    abbr.tabIndex = 0;
+  });
+}
+
+// Elements carry their tooltip in data attributes, so one set of listeners covers the whole page.
 function bindTips() {
   document.addEventListener("pointerover", (event) => {
     const el = tipTarget(event.target);
-    if (el) showTip(tipOf(el), event.clientX, event.clientY);
+    if (!el || el === tipEl) return;
+    showTip(tipOf(el), event.clientX, event.clientY);
+    tipEl = el;
   });
-  document.addEventListener("pointerout", (event) => { if (tipTarget(event.target) && !tipTarget(event.relatedTarget)) hideTip(); });
+  document.addEventListener("pointerout", (event) => { if (tipEl && !tipTarget(event.relatedTarget)) hideTip(); });
   document.addEventListener("pointermove", (event) => { if (!tipBox.hidden) placeTip(event.clientX, event.clientY); });
   document.addEventListener("pointerdown", hideTip);
+  document.addEventListener("focusin", (event) => {
+    const el = tipTarget(event.target);
+    if (!el || !event.target.matches(":focus-visible")) return;
+    const box = el.getBoundingClientRect();
+    showTip(tipOf(el), box.left, box.bottom - 12);
+  });
+  document.addEventListener("focusout", hideTip);
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const area = Object.assign(document.createElement("textarea"), { value: text });
+    document.body.append(area); area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
+
+async function copyPath(btn, x, y) {
+  const ok = await copyText(btn.dataset.copy);
+  btn.textContent = ok ? "✅" : "❌";
+  btn.dataset.tip = ok ? `Copied ${btn.dataset.copy}` : "Couldn't copy: the browser blocked the clipboard";
+  showTip(tipOf(btn), x, y);
+  clearTimeout(btn.resetTimer);
+  btn.resetTimer = setTimeout(() => { btn.textContent = COPY_ICON; btn.dataset.tip = COPY_TIP; }, 1500);
 }
 
 // Keyed by the locked state: the button's symbol and what pressing it does.
@@ -836,12 +930,12 @@ function showLocked(stage, locked) {
   const btn = stage.querySelector('[data-act="lock"]');
   const [label, title] = LOCK_LABELS[locked];
   btn.textContent = label;
-  btn.title = title;
+  btn.dataset.tip = title;
   btn.setAttribute("aria-label", title);
   btn.setAttribute("aria-pressed", String(locked));
 }
 
-const stageButton = (act, label, title) => `<button class="dia-btn" type="button" data-act="${act}" title="${title}" aria-label="${title}">${label}</button>`;
+const stageButton = (act, label, title) => `<button class="dia-btn" type="button" data-act="${act}" data-tip="${title}" aria-label="${title}">${label}</button>`;
 
 function createStage({ steps = false, lock = false, hints = [] }) {
   const stage = document.createElement("div");
@@ -853,7 +947,7 @@ function createStage({ steps = false, lock = false, hints = [] }) {
   const lockTool = lock ? stageButton("lock", LOCK_LABELS.true[0], LOCK_LABELS.true[1]) : "";
   stage.innerHTML = `<div class="dia-tools">${stepTools}${lockTool}${stageButton("out", "−", "Zoom out (−)")}${stageButton("in", "+", "Zoom in (+)")}${stageButton("fit", "Fit", "Fit to view (0)")}${stageButton("full", "⤢", "Full screen (F)")}</div>
     <div class="dia-view"></div>
-    <p class="dia-hint"><span>${["Drag to pan", "pinch or Ctrl/⌘ + scroll to zoom", ...hints].join(" · ")}</span></p>`;
+    <p class="dia-hint"><span>💡 ${["Drag to pan", "pinch or Ctrl/⌘ + scroll to zoom", ...hints].join(" · ")}</span></p>`;
   return stage;
 }
 
@@ -975,7 +1069,7 @@ function graphNodeTypes({ React, flow }) {
   // The diamond's points are the box's edge midpoints, where the handles already sit.
   const diamond = h("svg", { className: "rf-shape", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": true }, h("polygon", { points: "50,0 100,50 50,100 0,50" }));
   // In a machine a click moves to the state, so its code link gets its own button.
-  const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", title: "Open its code", onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
+  const codeButton = (link) => h("button", { type: "button", className: "rf-code nodrag", ...tipProps("Button", "code ↗", "Jump to the code that handles this state."), onClick: (event) => { event.stopPropagation(); jumpTo(link); } }, "code ↗");
   const card = ({ data, sourcePosition, targetPosition }) => h("div", {
     className: cls("rf-card", data.status, data.shape, data.final && "final", data.link && !data.machine && "linked"),
     ...tipProps(data.tipKind, data.label, data.tip, cardHint(data)),
@@ -1029,7 +1123,7 @@ function MachinePanel({ lib, graph, current, setCurrent }) {
     h("span", null, "State ", h("b", null, label(current))),
     events.length ? h("span", null, "· events") : h("span", null, "· no events out"),
     ...events.map((e, i) => h("button", { key: i, type: "button", className: "dia-btn event", ...tipProps("Event", e.label, e.tip, `Go to ${label(e.to)}`), onClick: () => setCurrent(e.to) }, e.label)),
-    current !== graph.machine.initial ? h("button", { type: "button", className: "dia-btn", onClick: () => setCurrent(graph.machine.initial) }, "Reset") : null);
+    current !== graph.machine.initial ? h("button", { type: "button", className: "dia-btn", ...tipProps("Button", "Reset", "Go back to the initial state."), onClick: () => setCurrent(graph.machine.initial) }, "↺ Reset") : null);
 }
 
 // Binds the stage's buttons and keys to React Flow's viewport, plus any extra actions. Returns whether it's full screen.
@@ -1347,5 +1441,5 @@ function trackToolbarHeight() {
   update();
 }
 
-renderMeta(); renderToc(); renderMain(); makeTablesResizable(); bindToolbar(); bindTips(); trackToolbarHeight(); refresh(); renderDiagrams();
+renderMeta(); renderToc(); renderMain(); promoteTerms(document); makeTablesResizable(); bindToolbar(); bindTips(); trackToolbarHeight(); refresh(); renderDiagrams();
 </script>

@@ -583,10 +583,20 @@ missing = [f for f in git("diff", "--name-only", base, head).split() if f not in
 if missing:
     sys.exit("changed files in no group:\n  " + "\n  ".join(missing))
 
+# Heading icons by overview slug. The page gets the same map, so section headings match.
+ICONS = {
+    "overview": "🧭", "summary": "📝", "before-after": "🔁", "before": "⏪", "after": "⏩", "architecture": "🏗️",
+    "data-flow": "🔀", "state": "🚦", "layout": "🗂️", "decisions": "⚖️", "area": "📍",
+    "api": "🔌", "metrics": "📈", "flags": "🚩",
+}
+
+def icon(slug: str) -> str:
+    return f'<span class="ico">{ICONS[slug]}</span>'
+
 def ov_part(slug: str, heading: str, body: str, show_heading: bool = True) -> str:
-    """One overview part. Its id and data-nav label give it an entry under Overview in the sidebar."""
-    h3 = f"<h3>{heading}</h3>" if show_heading else ""
-    return f'<div class="ov-part" id="ov-{slug}" data-nav="{html.escape(heading)}">{h3}{body}</div>'
+    """One overview part. Its id, data-nav label and icon give it an entry under Overview in the sidebar."""
+    h3 = f"<h3>{icon(slug)}{heading}</h3>" if show_heading else ""
+    return f'<div class="ov-part" id="ov-{slug}" data-nav="{html.escape(heading)}" data-icon="{ICONS[slug]}">{h3}{body}</div>'
 
 def overview_flows(slug: str, heading: str, flows: list[Flow]) -> str:
     if not check_flows("overview", flows):
@@ -634,7 +644,7 @@ def render_impact_levels(decisions: list[dict[str, Any]]) -> str:
 def render_decisions(decisions: list[dict[str, Any]]) -> str:
     """Decisions grouped by the area they touch, then by impact within each area."""
     return "".join(
-        f'<div class="ov-dec-area"><h4>{area}<span class="count">{len(items)}</span></h4>{render_impact_levels(items)}</div>'
+        f'<div class="ov-dec-area"><h4>{icon("area")}{area}<span class="count">{len(items)}</span></h4>{render_impact_levels(items)}</div>'
         for area, items in decisions_by_area(decisions).items())
 
 def name_cell(row: dict[str, Any]) -> str:
@@ -667,8 +677,8 @@ def before_after_part(ov: Overview) -> str:
     if not (ov.get("before") or ov.get("after")):
         return ""
     return ov_part("before-after", "Before and after", '<div class="ov-ba">'
-                   f'<div class="ov-card before"><h3>Before</h3><ul>{bullets(ov.get("before", []))}</ul></div>'
-                   f'<div class="ov-card after"><h3>After</h3><ul>{bullets(ov.get("after", []))}</ul></div></div>', show_heading=False)
+                   f'<div class="ov-card before"><h3>{icon("before")}Before</h3><ul>{bullets(ov.get("before", []))}</ul></div>'
+                   f'<div class="ov-card after"><h3>{icon("after")}After</h3><ul>{bullets(ov.get("after", []))}</ul></div></div>', show_heading=False)
 
 def architecture_part(ov: Overview) -> str:
     if not ov.get("graph"):
@@ -701,7 +711,7 @@ def render_overview(ov: Optional[Overview]) -> str:
     """The overview's parts in page order; each part with content gets a sidebar entry."""
     if not ov:
         return ""
-    return ('<section class="overview" id="overview"><h2>Overview</h2>'
+    return ('<section class="overview" id="overview"><h2>' + icon("overview") + 'Overview</h2>'
             + "".join(part(ov) for part in OVERVIEW_PARTS) + "</section>")
 
 def compact(n: int) -> str:
@@ -728,7 +738,7 @@ def render_usage(u: dict[str, Any]) -> str:
         f"Estimate at {u['pricing']}.",
     ])
     cost = f"~${u['cost_usd']:.2f}" + ("+" if u["unpriced_models"] else "")
-    return (f'<span class="usage" title="{html.escape(breakdown)}">Guide built with '
+    return (f'<span class="usage" tabindex="0" data-tip-label="🧮 Cost of building this guide" data-tip="{html.escape(breakdown)}">🤖 Guide built with '
             f'<b>{compact(t["total"])}</b> tokens · <b>{cost}</b></span>')
 
 def js(value):
@@ -745,6 +755,6 @@ for key, value in {
 }.items():
     tpl = tpl.replace(key, value)
 tpl = tpl.replace("/*__XYFLOW_CSS__*/", (assets / "xyflow.css").read_text() if has_diagram else "")
-tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(meta))
+tpl = tpl.replace("/*__DATA__*/null", js(groups)).replace("/*__META__*/[]", js(meta)).replace("/*__ICONS__*/{}", js(ICONS))
 out_path.write_text(tpl)
 print(f"wrote {out_path} ({len(tpl)} bytes, {sum(len(g['files']) for g in groups)} files)")
