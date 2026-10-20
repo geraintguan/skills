@@ -322,6 +322,7 @@ them in the section whose tests or evals use them:
 ```json
 {"file": "src/feed/GroupedCard.test.tsx",
  "name": "GroupedCard › opens a clicked row and tracks its position",
+ "summary": "Clicking a row opens it and tracks its position.",
  "change": "Added",
  "type": "Integration",
  "inputs": "3 items with an <code>onOpenItem</code> spy; clicks the second row.",
@@ -335,7 +336,10 @@ them in the section whose tests or evals use them:
   - `Integration`: renders components, with Testing Library in jsdom or in a Storybook
     play function.
   - `E2E`: Playwright or similar against the running app.
-- `name` takes the form "describe › test", using the real names from the source.
+- `name` takes the form "describe › test", using the real names from the source. The
+  page shows it on hover over the summary.
+- `summary` is what the Test column shows: a short HTML phrase, under ten words, on
+  what the test checks, in plain words rather than the test's own name.
 - `inputs` covers fixture sizes, props, mocked providers, cache contents and user
   actions. List the cases of an `.each`.
 - `expected` covers the concrete assertions: calls and their arguments, ARIA roles

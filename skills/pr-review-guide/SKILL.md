@@ -44,7 +44,7 @@ From top to bottom:
    - a State card, when the section adds or changes state: its finite state machine
    - its files' diffs, with an "About this file" note and inline line notes
    - on each test file, above its diff, a Tests table, collapsed by default: change,
-     test name, Unit / Integration / E2E, inputs, expected output, and why the test changed
+     a short description of the test, Unit / Integration / E2E, inputs, expected output, and why the test changed
    - a Fixtures card, when the section's tests or evals use data files: a summary of the
      data, then each file's change, size and what it holds. Fixtures get no diff, no line
      notes and no reviewed box
@@ -261,7 +261,8 @@ some of which may be impossible.
    one to three sections, and give each the inventory path, its files, the base commit,
    the row schema from `references/config.md`, and a paragraph on what the PR changes.
    Ask them to:
-   - use the real test names
+   - use the real test names in `name`
+   - write a short `summary` of what each test checks, which the table shows
    - say when a change is a rename only
    - name the test that replaces each removed one
 4. Merge the rows into each section's `tests` array. The page shows each row in its
