@@ -281,8 +281,10 @@ some of which may be impossible.
 ### 5. Describe the tests
 
 1. Run `python3 <skill>/scripts/tests_inventory.py <base> inventory.json` from the repo
-   root. It lists the added, modified and removed test cases (`it`/`test`, including
-   `.each`), and the Storybook stories that have a `play` function.
+   root. It lists the added, modified and removed test cases: JavaScript and TypeScript
+   `it`/`test` (including `.each`), Storybook stories that have a `play` function, and
+   Python `test*` functions and methods in `test_*.py` and `*_test.py` files (pytest and
+   unittest, named `Class › test_name`).
 2. The inventory is a starting point. Its describe prefixes can be wrong for sibling
    `describe` blocks. A "modified" test may only rename a constant. A test renamed in
    place shows as one removal plus one addition.
